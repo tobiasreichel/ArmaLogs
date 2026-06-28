@@ -175,6 +175,15 @@ $admin = current_admin();
       const i=Math.floor(Math.log(n)/Math.log(k));
       return (n/Math.pow(k,i)).toFixed(2)+' '+s[i];
     }
+    function renderModSummary(l){
+      if(!l || !l.workshop_mods_json) return '';
+      let list=[];
+      try{ list=JSON.parse(l.workshop_mods_json); }catch(e){ return ''; }
+      if(!Array.isArray(list) || list.length===0) return '';
+      const preview=list.slice(0,3).map(m=>escapeHtml(m.name||m.workshop_id)).join(', ');
+      const more=list.length>3?` and ${list.length-3} more` :'';
+      return ` · ${preview}${more}`;
+    }
     async function loadStats(){
       const s=await api('stats');
       document.getElementById('stat-friends').textContent=s.friends;
@@ -290,7 +299,7 @@ $admin = current_admin();
                   <input type="checkbox" class="session-check" data-ids="${allIds}" onclick="selectSession(this)">
                   ${escapeHtml(sess.session)}
                 </div>
-                <div class="meta">${sess.items.length} file${sess.items.length===1?'':'s'} · ${fmtBytes(sessTotal)}${sess.items[0]?.workshop_mod_count ? ` · ${sess.items[0].workshop_mod_count} Workshop mods` : ''}</div>
+                <div class="meta">${sess.items.length} file${sess.items.length===1?'':'s'} · ${fmtBytes(sessTotal)}${sess.items[0]?.workshop_mod_count ? ` · ${sess.items[0].workshop_mod_count} Workshop mods` : ''}${renderModSummary(sess.items[0])}</div>
               </div>
               <div class="tree-body">
                 <table>

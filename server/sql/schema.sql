@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     log_count       INT UNSIGNED NOT NULL DEFAULT 0,
     total_bytes     BIGINT UNSIGNED NOT NULL DEFAULT 0,
     workshop_mod_count INT UNSIGNED NULL,
+    workshop_mods_json JSON NULL,
     UNIQUE KEY uq_sessions_session (friend_id, session_id),
     KEY idx_sessions_friend_uploaded (friend_id, uploaded_at),
     CONSTRAINT fk_sessions_friend FOREIGN KEY (friend_id) REFERENCES friends(id) ON DELETE CASCADE

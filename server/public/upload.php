@@ -74,6 +74,13 @@ $workshopModCount = null;
 if (isset($_POST['workshop_mod_count']) && is_numeric($_POST['workshop_mod_count'])) {
     $workshopModCount = (int)$_POST['workshop_mod_count'];
 }
+$workshopModsJson = null;
+if (!empty($_POST['workshop_mods_json'])) {
+    $decoded = json_decode($_POST['workshop_mods_json'], true);
+    if (is_array($decoded)) {
+        $workshopModsJson = json_encode($decoded);
+    }
+}
 
 $files = [];
 $uploadCount = count($_FILES['logs']['tmp_name']);
@@ -108,14 +115,15 @@ try {
 
     // Create or update session record
     $stmtSession = $pdo->prepare(
-        'INSERT INTO sessions (friend_id, session_id, client_hostname, uploaded_at, log_count, total_bytes, workshop_mod_count)
-         VALUES (:friend_id, :session_id, :hostname, NOW(), 0, 0, :wmc)
+        'INSERT INTO sessions (friend_id, session_id, client_hostname, uploaded_at, log_count, total_bytes, workshop_mod_count, workshop_mods_json)
+         VALUES (:friend_id, :session_id, :hostname, NOW(), 0, 0, :wmc, :wmj)
          ON DUPLICATE KEY UPDATE
            client_hostname = COALESCE(VALUES(client_hostname), client_hostname),
            uploaded_at = NOW(),
            log_count = log_count + VALUES(log_count),
            total_bytes = total_bytes + VALUES(total_bytes),
-           workshop_mod_count = COALESCE(VALUES(workshop_mod_count), workshop_mod_count)'
+           workshop_mod_count = COALESCE(VALUES(workshop_mod_count), workshop_mod_count),
+           workshop_mods_json = COALESCE(VALUES(workshop_mods_json), workshop_mods_json)'
     );
 
     $stmtLog = $pdo->prepare(
@@ -142,6 +150,7 @@ try {
             ':session_id' => $sid,
             ':hostname'   => $clientHostname,
             ':wmc'        => $workshopModCount,
+            ':wmj'        => $workshopModsJson,
         ]);
 
         $stmt = $pdo->prepare('SELECT id FROM sessions WHERE friend_id = :f AND session_id = :s LIMIT 1');

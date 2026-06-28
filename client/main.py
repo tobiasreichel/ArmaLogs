@@ -14,7 +14,7 @@ from .updater import check_update
 from .watcher import Watcher
 
 
-__version__ = "1.1.7"
+__version__ = "1.1.8"
 
 
 def create_image():

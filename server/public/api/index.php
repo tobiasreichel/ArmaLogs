@@ -458,7 +458,7 @@ function serve_logs_list(): void {
     if ($limit < 0) { $limit = 50; }
     if ($limit > 0 && $limit > 10000) { $limit = 10000; }
     $offset = (int)($_GET['offset'] ?? 0);
-    $sql = 'SELECT l.id, l.friend_id, l.session_id AS session_db_id, s.session_id, s.workshop_mod_count,
+    $sql = 'SELECT l.id, l.friend_id, l.session_id AS session_db_id, s.session_id, s.workshop_mod_count, s.workshop_mods_json,
                    f.name AS friend_name, l.filename, l.file_size, l.content_sha256,
                    l.client_timestamp, l.uploaded_at, l.storage_path
             FROM logs l
