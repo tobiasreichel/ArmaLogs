@@ -398,6 +398,11 @@ function handle_analyze(): void {
     $first = $rows[0];
     $multiFriend = count($friendIds) > 1;
     $multiSession = count($sessionIds) > 1;
+    $title = $multiFriend
+        ? ('multi_' . $first['friend_name'] . '_' . $first['session_id'])
+        : ($multiSession
+            ? ('multi_session_' . $first['friend_name'] . '_' . $first['session_id'])
+            : ($first['friend_name'] . '_' . $first['session_id']));
     $ins = $pdo->prepare(
         'INSERT INTO reports (friend_id, session_id, log_ids, title, summary, findings, model, markdown, is_multi_friend, is_multi_session) VALUES (:fid, :sid, :lids, :title, :summary, :findings, :model, :markdown, :multi_friend, :multi_session)'
     );
@@ -405,7 +410,7 @@ function handle_analyze(): void {
         ':fid'          => $multiFriend ? null : ($first['friend_id'] ?? null),
         ':sid'          => $multiSession ? null : ($first['session_db_id'] ?? null),
         ':lids'         => json_encode($ids),
-        ':title'        => $report['title'],
+        ':title'        => $title,
         ':summary'      => $report['summary'],
         ':findings'     => json_encode($report['findings']),
         ':model'        => $cfg['model'],
