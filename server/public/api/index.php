@@ -434,7 +434,8 @@ function call_claude(array $cfg, array $rows, string $context): ?array {
             'anthropic-version: 2023-06-01',
         ],
         CURLOPT_POSTFIELDS     => json_encode($payload),
-        CURLOPT_TIMEOUT        => 120,
+        CURLOPT_CONNECTTIMEOUT => 30,
+        CURLOPT_TIMEOUT        => 300,
     ]);
     $resp = curl_exec($ch);
     $err = curl_error($ch);
