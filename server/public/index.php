@@ -508,9 +508,9 @@ $admin = current_admin();
       const overlay=document.createElement('div');
       overlay.id='modalOverlay';
       overlay.style='position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;';
-      overlay.innerHTML=`<div style="background:#1e293b;border:1px solid var(--border);border-radius:12px;max-width:900px;max-height:90vh;width:100%;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.5)">
+      overlay.innerHTML=`<div style="background:#1e293b;border:1px solid var(--border);border-radius:12px;max-width:95vw;max-height:95vh;width:95vw;height:95vh;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.5)">
         <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0;font-size:1rem">${escapeHtml(title)}</h3><button onclick="document.getElementById('modalOverlay').remove()" class="btn">Close</button></div>
-        <div style="padding:20px;overflow:auto;font-size:.85rem;line-height:1.5;${monospace?'font-family:monospace;white-space:pre;':''}">${body}</div>
+        <div style="padding:20px;overflow:auto;font-size:.85rem;line-height:1.5;flex:1;${monospace?'font-family:monospace;white-space:pre;':''}">${body}</div>
       </div>`;
       overlay.onclick=(ev)=>{if(ev.target===overlay) overlay.remove();};
       document.body.appendChild(overlay);
