@@ -409,21 +409,40 @@ function call_claude(array $cfg, array $rows, string $context): ?array {
     $friend = $rows[0]['friend_name'] ?? 'unknown';
     $session = $rows[0]['session_id'] ?? 'unknown';
 
-    $prompt = "You are an expert Arma Reforger server log analyst." .
-        " Analyze the following log(s) from friend '$friend' (session '$session').\n\n" .
-        "Return a single JSON object and nothing else. Do not wrap in markdown code blocks. Do not add commentary outside JSON." .
-        " The JSON must match this exact schema:\n" .
-        '{"title":"A short title, max 80 chars","summary":"2-4 sentences overview with **bold** for key terms and \\n for line breaks. Markdown allowed: bold, lists, line breaks.","findings":[{"severity":"critical|warning|info","category":"crash|stutter|network|error|performance|other","title":"Short finding title, max 80 chars","details":"Concise explanation. Markdown allowed: **bold**, bullet lists with -, line breaks with \\n."}]}' .
-        "\n\nUse severity 'critical' only for crashes, fatal exceptions, or game-breaking bugs." .
-        " Use 'warning' for notable errors, missing assets, or performance concerns." .
-        " Use 'info' for normal startup/shutdown and minor noise." .
-        " Focus on: game crashes, exceptions, low FPS/stutter events, network timeouts, RCON/admin actions, and anything unusual." .
-        " If nothing important happened, return a short summary with zero findings.\n\n" .
+    $system = "You are an expert Arma Reforger server log analyst. You MUST return ONLY a single valid JSON object." .
+        " No markdown code fences, no prose before or after, no explanation." .
+        " The response must be parseable by json_decode() exactly.";
+
+    $example = json_encode([
+        'title'    => 'Short title (max 80 chars)',
+        'summary'  => '2-4 sentence overview. Use markdown **bold** and \\n line breaks. No bullet lists in summary.',
+        'findings' => [
+            [
+                'severity' => 'critical|warning|info',
+                'category' => 'crash|stutter|network|error|performance|other',
+                'title'    => 'Short finding title (max 80 chars)',
+                'details'  => 'Concise details. Markdown allowed: **bold**, line breaks \\n.',
+            ],
+        ],
+    ]);
+
+    $prompt = "Analyze the following log(s) from friend '$friend' (session '$session').\n\n" .
+        "Return EXACTLY this JSON shape (no markdown fences, no extra text):\n" .
+        $example . "\n\n" .
+        "Rules:\n" .
+        "- 'title': max 80 characters, plain text.\n" .
+        "- 'summary': 2-4 sentences. Use markdown **bold** for key terms and \\n for line breaks only. No bullet lists.\n" .
+        "- 'findings': array. Use 'critical' only for crashes/fatal exceptions. 'warning' for notable errors/performance. 'info' for minor noise. Categories: crash, stutter, network, error, performance, other.\n" .
+        "- 'findings[].title': max 80 chars, plain text.\n" .
+        "- 'findings[].details': 1-3 sentences, markdown **bold** and \\n allowed. No bullet lists.\n" .
+        "- If nothing important happened, set findings to [] and write a short summary.\n\n" .
+        "Focus on: game crashes, exceptions, low FPS/stutter events, network timeouts, RCON/admin actions.\n\n" .
         "LOG CONTENT:\n" . $context . "\n\nReturn only valid JSON.";
 
     $payload = [
         'model'      => $model,
         'max_tokens' => $maxTokens,
+        'system'     => $system,
         'messages'   => [
             ['role' => 'user', 'content' => $prompt],
         ],
@@ -460,16 +479,41 @@ function call_claude(array $cfg, array $rows, string $context): ?array {
     $text = $data['content'][0]['text'];
     if (preg_match('/```json\s*(\{.*\})\s*```/s', $text, $m)) {
         $text = $m[1];
+    } elseif (preg_match('/(\{.*\})/s', $text, $m)) {
+        $text = $m[1];
     }
     $report = json_decode($text, true);
     if (!is_array($report) || !isset($report['title'], $report['summary'], $report['findings'])) {
+        $report = repair_report($text);
+    }
+    if (!is_array($report) || !isset($report['title'], $report['summary'], $report['findings'])) {
         return [
             'title'    => 'AI report',
-            'summary'  => $text,
+            'summary'  => "The model returned unstructured output. Raw text below:\n\n" . $text,
             'findings' => [],
         ];
     }
+    if (!is_array($report['findings'])) {
+        $report['findings'] = [];
+    }
     return $report;
+}
+
+function repair_report(string $text): ?array {
+    // Try to fix common model malformations
+    $fixed = trim($text);
+    // Remove any trailing garbage after the closing }
+    $fixed = preg_replace('/^(\{.*\}).*$/s', '$1', $fixed);
+    // Fix missing comma between summary string and findings array when they abut
+    $fixed = preg_replace('/"summary"\s*:\s*"([^"\\]*(\\.[^"\\]*)*)"\s*"findings"/s', '"summary":"$1","findings"', $fixed);
+    // Fix missing comma between string value and next key
+    $fixed = preg_replace('/"([^"\\]*)"\s*:\s*"([^"\\]*(\\.[^"\\]*)*)"\s*"([^"]+?)"\s*:/s', '"$1":"$2","$4":', $fixed);
+    // Try decode
+    $arr = json_decode($fixed, true);
+    if (is_array($arr) && isset($arr['title'], $arr['summary'], $arr['findings'])) {
+        return $arr;
+    }
+    return null;
 }
 
 function handle_reports(string $method): void {
