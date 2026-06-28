@@ -17,7 +17,15 @@ if ($authHeader === '') {
     $authHeader = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
 }
 if ($authHeader === '') {
-    $authHeader = apache_request_headers()['Authorization'] ?? '';
+    $headers = function_exists('apache_request_headers') ? apache_request_headers() : [];
+    $authHeader = $headers['Authorization'] ?? '';
+}
+// Fallback for hosts that strip Authorization headers (e.g. Cloudron LAMP)
+if ($authHeader === '') {
+    $alt = $_SERVER['HTTP_X_FRIEND_TOKEN'] ?? '';
+    if ($alt !== '') {
+        $authHeader = 'Bearer ' . $alt;
+    }
 }
 $token = '';
 if (preg_match('/^Bearer\s+(.+)$/i', $authHeader, $m)) {
@@ -29,6 +37,10 @@ if ($token === '') {
 
 $friend = authenticate_friend_by_token($token);
 if (!$friend) {
+    // Debug hint: log stripped headers without leaking tokens in production
+    if (empty($_SERVER['HTTP_AUTHORIZATION']) && empty($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+        error_log('ArmaLogs upload: Authorization header missing or stripped by web server');
+    }
     json_error('Invalid or inactive friend token', 401);
 }
 

@@ -74,7 +74,7 @@ def upload_session(
         last_error: Optional[Exception] = None
         for attempt in range(retries):
             try:
-                headers = {"Authorization": f"Bearer {token}"}
+                headers = {"Authorization": f"Bearer {token}", "X-Friend-Token": token}
                 resp = requests.post(
                     server_url,
                     files=payload_files,
