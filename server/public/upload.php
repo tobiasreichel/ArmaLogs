@@ -214,5 +214,10 @@ try {
     if (isset($pdo) && $pdo->inTransaction()) {
         $pdo->rollback();
     }
+    error_log(
+        'ArmaLogs upload exception: ' . $e->getMessage() .
+        ' in ' . $e->getFile() . ':' . $e->getLine() .
+        "\n" . $e->getTraceAsString()
+    );
     json_error('Server error: ' . $e->getMessage(), 500);
 }
