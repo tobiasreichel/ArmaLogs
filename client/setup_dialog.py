@@ -10,11 +10,24 @@ from .config import default_config
 
 
 DEFAULT_LOG_ROOT = Path.home() / "Documents/My Games/ArmaReforger/logs"
+DEFAULT_SERVER_URL = "https://armalogs.reichel.network/upload.php"
 
 
 def run_setup_dialog() -> bool:
     """Show a simple setup dialog. Returns True if config was saved."""
     cfg = default_config()
+
+    # Use saved values, but prefill defaults if this is the first run.
+    saved_url = cfg.get("server_url", "")
+    saved_log = cfg.get("log_root", "")
+
+    if not saved_url:
+        cfg.set("server_url", DEFAULT_SERVER_URL)
+    if not saved_log:
+        cfg.set("log_root", str(DEFAULT_LOG_ROOT))
+
+    url_default = cfg.get("server_url", DEFAULT_SERVER_URL)
+    log_default = cfg.get("log_root", str(DEFAULT_LOG_ROOT))
 
     root = tk.Tk()
     root.title("ArmaLogs Client Setup")
@@ -40,7 +53,7 @@ def run_setup_dialog() -> bool:
     frame.pack(fill=tk.BOTH, expand=True)
 
     ttk.Label(frame, text="Server URL").grid(row=0, column=0, sticky=tk.W, pady=(0, 4))
-    url_var = tk.StringVar(value=cfg.get("server_url", ""))
+    url_var = tk.StringVar(value=url_default)
     url_entry = ttk.Entry(frame, textvariable=url_var, width=60)
     url_entry.grid(row=1, column=0, columnspan=2, sticky=tk.EW, pady=(0, 12))
 
@@ -50,7 +63,7 @@ def run_setup_dialog() -> bool:
     name_entry.grid(row=3, column=0, sticky=tk.W, pady=(0, 12))
 
     ttk.Label(frame, text="Arma Reforger Logs Folder").grid(row=4, column=0, sticky=tk.W, pady=(0, 4))
-    log_var = tk.StringVar(value=cfg.get("log_root", str(DEFAULT_LOG_ROOT)))
+    log_var = tk.StringVar(value=log_default)
     log_entry = ttk.Entry(frame, textvariable=log_var, width=60)
     log_entry.grid(row=5, column=0, columnspan=2, sticky=tk.EW, pady=(0, 12))
 
