@@ -9,6 +9,7 @@ import pystray
 from PIL import Image, ImageDraw
 
 from .config import default_config
+from .setup_dialog import run_setup_dialog
 from .watcher import Watcher
 
 
@@ -52,14 +53,10 @@ class TrayApp:
 
     def run(self):
         if not self.cfg.is_complete():
-            self.cfg.set("server_url", "")
-            self.cfg.set("token", "")
-            self.cfg.set("log_root", "")
-            webbrowser.open(f"file://{self.cfg.path.parent}")
-            self.icon.title = "ArmaLogs — configure config.json"
-        else:
-            self._thread = threading.Thread(target=self._watch, daemon=True)
-            self._thread.start()
+            if not run_setup_dialog():
+                return
+        self._thread = threading.Thread(target=self._watch, daemon=True)
+        self._thread.start()
         self.icon.run()
 
     def _watch(self):

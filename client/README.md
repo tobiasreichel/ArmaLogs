@@ -1,42 +1,51 @@
-# ArmaLogs client
+# ArmaLogs Windows Client
 
-Windows tray app that watches the Arma Reforger log folder and uploads new session folders to the server.
+Small system-tray app that watches your Arma Reforger log folder and uploads new sessions to the server.
 
-## Install
+## Download (no Python needed)
+
+If someone already built the release for you:
+
+1. Download `ArmaLogsClient.exe`
+2. Double-click it
+3. Fill in:
+   - **Server URL**: your buddy's server, e.g. `https://armalogs.reichel.network`
+   - **Friend Token**: the token created in the admin dashboard
+   - **Logs Folder**: usually `C:\Users\YOURNAME\Documents\My Games\ArmaReforger\logs`
+4. Click **Save & Start**
+
+The app sits in your system tray and uploads logs automatically. Right-click the tray icon to force an upload or exit.
+
+## Build from source
 
 ```powershell
 cd client
 python -m venv .venv
-.\.venv\Scripts\activate
+.venv\Scripts\activate
 pip install -r requirements.txt
-```
-
-## Configure
-
-Copy `config.json.example` to `%USERPROFILE%\.armalogs\config.json` and fill in:
-
-```json
-{
-  "server_url": "https://your-host/upload.php",
-  "token": "paste-friend-token-here",
-  "log_root": "C:/Users/yourname/Documents/My Games/ArmaReforger/logs",
-  "scan_interval_seconds": 30
-}
-```
-
-## Run
-
-```powershell
 python -m client.main
 ```
 
-Or double-click `run.bat`.
-
-## Build standalone executable
+## Build the .exe
 
 ```powershell
-pip install pyinstaller
-pyinstaller --onefile --noconsole --name ArmaLogsClient main.py
+cd client
+.\build-exe.ps1
 ```
 
-The executable lands in `dist/ArmaLogsClient.exe`.
+Or double-click `build-exe.bat`. The executable appears in `client/dist/ArmaLogsClient.exe`.
+
+## Where is my config stored?
+
+`%USERPROFILE%\.armalogs\config.json`
+
+You can delete that file to make the setup dialog appear again.
+
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| "Server URL, token, and log folder are required" | Re-run and fill all fields |
+| "Folder not found" | Browse to `Documents\My Games\ArmaReforger\logs` manually |
+| Nothing uploads | Right-click tray icon → **Upload now** |
+| Antivirus blocks it | False positive from PyInstaller; allow the app |
