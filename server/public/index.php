@@ -67,6 +67,7 @@ $admin = current_admin();
       <div class="card"><h3>Sessions</h3><p class="value" id="stat-sessions">—</p></div>
       <div class="card"><h3>Logs</h3><p class="value" id="stat-logs">—</p></div>
       <div class="card"><h3>Storage</h3><p class="value" id="stat-bytes">—</p></div>
+      <div class="card"><h3>AI Reports</h3><p class="value" id="stat-reports">—</p></div>
     </section>
 
     <section>
@@ -97,12 +98,21 @@ $admin = current_admin();
 
     <section style="margin-top:32px">
       <div class="section-title" style="margin-bottom:12px">
+        <h2>AI Reports</h2>
+        <button class="btn" onclick="loadReports()">Refresh</button>
+      </div>
+      <div id="reports-list"></div>
+    </section>
+
+    <section style="margin-top:32px">
+      <div class="section-title" style="margin-bottom:12px">
         <h2>Logs by session</h2>
       </div>
       <div class="toolbar" style="margin-bottom:12px">
         <button class="btn" onclick="expandAllTrees(true)">Expand all</button>
         <button class="btn" onclick="expandAllTrees(false)">Collapse all</button>
         <button class="btn" onclick="downloadSelectedLogs()">Download .zip</button>
+        <button class="btn" onclick="analyzeSelectedLogs()">Analyze with AI</button>
       </div>
       <div class="filter-row" style="margin-bottom:12px">
         <input id="log-filter" placeholder="Search filename / session / friend" oninput="applyLogFilter()">
@@ -154,6 +164,7 @@ $admin = current_admin();
       document.getElementById('stat-sessions').textContent=s.sessions;
       document.getElementById('stat-logs').textContent=s.logs;
       document.getElementById('stat-bytes').textContent=fmtBytes(s.bytes);
+      document.getElementById('stat-reports').textContent=s.reports ?? 0;
     }
     async function loadFriends(){
       const data=await api('friends');
@@ -277,6 +288,39 @@ $admin = current_admin();
         showToast(`Downloaded ${ids.length} log(s)`);
       }catch(e){showToast(e.message,true);}
     }
+    async function analyzeSelectedLogs(){
+      const ids=Array.from(document.querySelectorAll('.log-check:checked')).map(cb=>parseInt(cb.dataset.id));
+      if(ids.length===0){showToast('No logs selected',true);return;}
+      showToast('Analyzing with AI...');
+      try{
+        const data=await api('analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})});
+        await loadReports();loadStats();showToast(`AI report created: ${data.report.title}`);
+      }catch(e){showToast(e.message,true);}
+    }
+    async function loadReports(){
+      const data=await api('reports');
+      const list=document.getElementById('reports-list');
+      if(data.reports.length===0){list.innerHTML='<p class="muted">No reports yet. Select logs and click Analyze with AI.</p>';return;}
+      list.innerHTML='';
+      for(const r of data.reports){
+        const findings=Array.isArray(r.findings)?r.findings:JSON.parse(r.findings||'[]');
+        const div=document.createElement('div');
+        div.className='tree-group';
+        div.innerHTML=`<div class="tree-header" onclick="toggleTree(this)">
+          <div class="title">${escapeHtml(r.title)}</div>
+          <div class="meta">${escapeHtml(r.friend_name||'unknown')} / ${escapeHtml(r.session_id||'unknown')} · ${new Date(r.created_at).toLocaleString()} · ${r.model}</div>
+        </div>
+        <div class="tree-body" style="padding:14px">
+          <p>${escapeHtml(r.summary).replace(/\n/g,'<br>')}</p>
+          ${findings.length?'<h4 style="margin:12px 0 6px">Findings</h4>'+findings.map(f=>`
+            <div style="margin-bottom:10px;border-left:3px solid ${f.severity==='critical'?'var(--danger)':f.severity==='warning'?'#ffaa00':'var(--success)'};padding-left:10px">
+              <strong>${escapeHtml(f.title)}</strong> <span class="muted">(${escapeHtml(f.severity)} · ${escapeHtml(f.category)})</span><br>
+              <span>${escapeHtml(f.details)}</span>
+            </div>`).join(''):''}
+        </div>`;
+        list.appendChild(div);
+      }
+    }
     function escapeHtml(s){return s.replace(/[<>&"']/g,c=>({'<':'\u0026lt;','>':'\u0026gt;','&':'\u0026amp;','"':'\u0026quot;',"'":'\u0026#39;'}[c]));}
 
     const dialog=document.getElementById('friend-dialog');
@@ -340,7 +384,7 @@ $admin = current_admin();
         await loadRequests();showToast('Request rejected');
       }catch(e){showToast(e.message,true);}
     }
-    (async()=>{await loadStats();await loadFriends();await loadRequests();await loadLogs();})();
+    (async()=>{await loadStats();await loadFriends();await loadRequests();await loadLogs();await loadReports();})();
   </script>
 </body>
 </html>

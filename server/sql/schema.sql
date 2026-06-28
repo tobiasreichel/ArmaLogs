@@ -65,6 +65,23 @@ CREATE TABLE IF NOT EXISTS logs (
     CONSTRAINT fk_logs_friend FOREIGN KEY (friend_id) REFERENCES friends(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS reports (
+    id            BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    friend_id     INT UNSIGNED     NULL,
+    session_id    BIGINT UNSIGNED  NULL,
+    log_ids       JSON             NOT NULL,
+    title         VARCHAR(255)     NOT NULL,
+    summary       TEXT             NOT NULL,
+    findings      JSON             NOT NULL,
+    model         VARCHAR(64)      NOT NULL,
+    created_at    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_reports_friend (friend_id),
+    KEY idx_reports_session (session_id),
+    KEY idx_reports_created (created_at),
+    CONSTRAINT fk_reports_friend FOREIGN KEY (friend_id) REFERENCES friends(id) ON DELETE SET NULL,
+    CONSTRAINT fk_reports_session FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS upload_queue (
     id            BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     friend_id     INT UNSIGNED NOT NULL,

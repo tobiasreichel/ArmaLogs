@@ -33,6 +33,14 @@ return [
         'cookie_httponly' => true,
         'samesite'        => 'Lax',
     ],
+    'ai' => [
+        'enabled'     => false,
+        'provider'    => 'anthropic',
+        'api_key'     => '',
+        'model'       => 'claude-3-5-sonnet-20241022',
+        'max_tokens'  => 4096,
+        'max_chars'   => 200_000,
+    ],
     'setup' => [
         'enabled' => true,
     ],

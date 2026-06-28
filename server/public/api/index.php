@@ -23,6 +23,10 @@ if ($path === 'friends') {
     handle_friend_request_reject();
 } elseif ($path === 'logs') {
     handle_logs($method);
+} elseif ($path === 'analyze') {
+    handle_analyze();
+} elseif ($path === 'reports') {
+    handle_reports($method);
 } elseif ($path === 'stats') {
     handle_stats();
 } else {
@@ -288,6 +292,7 @@ function handle_stats(): void {
     $friends = $pdo->query('SELECT COUNT(*) FROM friends')->fetchColumn();
     $sessions = $pdo->query('SELECT COUNT(*) FROM sessions')->fetchColumn();
     $logs = $pdo->query('SELECT COUNT(*), COALESCE(SUM(file_size), 0) FROM logs')->fetch(PDO::FETCH_NUM);
+    $reports = $pdo->query('SELECT COUNT(*) FROM reports')->fetchColumn();
     $latest = $pdo->query(
         'SELECT f.name, l.filename, l.uploaded_at FROM logs l
          JOIN friends f ON f.id = l.friend_id
@@ -299,6 +304,177 @@ function handle_stats(): void {
         'sessions'   => (int)$sessions,
         'logs'       => (int)$logs[0],
         'bytes'      => (int)$logs[1],
+        'reports'    => (int)$reports,
         'latest_log' => $latest ?: null,
     ]);
+}
+
+function handle_analyze(): void {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        json_error('POST required', 405);
+    }
+    $cfg = config()['ai'] ?? null;
+    if (!$cfg || !($cfg['enabled'] ?? false) || ($cfg['api_key'] ?? '') === '') {
+        json_error('AI analysis is not configured');
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true) ?: [];
+    $ids = array_map('intval', (array)($input['ids'] ?? []));
+    if (empty($ids)) {
+        json_error('No log IDs selected');
+    }
+
+    $pdo = db();
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = $pdo->prepare(
+        "SELECT l.id, l.filename, f.name AS friend_name, s.session_id, l.storage_path, l.file_size, l.session_id AS session_db_id, l.friend_id
+         FROM logs l
+         JOIN friends f ON f.id = l.friend_id
+         LEFT JOIN sessions s ON s.id = l.session_id
+         WHERE l.id IN ($placeholders)"
+    );
+    $stmt->execute($ids);
+    $rows = $stmt->fetchAll();
+    if (empty($rows)) {
+        json_error('Logs not found', 404);
+    }
+
+    $base = rtrim(config()['paths']['storage'] ?? '/app/data/storage/logs', '/');
+    $maxChars = (int)($cfg['max_chars'] ?? 200_000);
+    $context = "";
+    $read = 0;
+    foreach ($rows as $row) {
+        $path = $base . '/' . ltrim($row['storage_path'], '/');
+        if (!file_exists($path)) {
+            continue;
+        }
+        $text = file_get_contents($path);
+        if ($text === false) {
+            continue;
+        }
+        // Trim huge files from the tail; keep start + end
+        $remaining = $maxChars - strlen($context);
+        if ($remaining <= 0) {
+            break;
+        }
+        $header = "\n\n===== " . $row['friend_name'] . " / " . ($row['session_id'] ?? 'unknown') . " / " . $row['filename'] . " =====\n";
+        $budget = $remaining - strlen($header);
+        if ($budget <= 0) {
+            break;
+        }
+        if (strlen($text) > $budget) {
+            $half = (int)($budget / 2);
+            $text = substr($text, 0, $half) . "\n\n... [truncated] ...\n\n" . substr($text, -$half);
+        }
+        $context .= $header . $text;
+        $read++;
+    }
+
+    if ($context === '') {
+        json_error('No readable log content');
+    }
+
+    $report = call_claude($cfg, $rows, $context);
+    if ($report === null) {
+        json_error('AI analysis failed');
+    }
+
+    $first = $rows[0];
+    $ins = $pdo->prepare(
+        'INSERT INTO reports (friend_id, session_id, log_ids, title, summary, findings, model) VALUES (:fid, :sid, :lids, :title, :summary, :findings, :model)'
+    );
+    $ins->execute([
+        ':fid'      => $first['friend_id'] ?? null,
+        ':sid'      => $first['session_db_id'] ?? null,
+        ':lids'     => json_encode($ids),
+        ':title'    => $report['title'],
+        ':summary'  => $report['summary'],
+        ':findings' => json_encode($report['findings']),
+        ':model'    => $cfg['model'],
+    ]);
+
+    json_response([
+        'ok'       => true,
+        'report'   => $report,
+        'read'     => $read,
+        'truncated' => strlen($context) >= $maxChars,
+    ]);
+}
+
+function call_claude(array $cfg, array $rows, string $context): ?array {
+    $apiKey = $cfg['api_key'];
+    $model = $cfg['model'];
+    $maxTokens = (int)($cfg['max_tokens'] ?? 4096);
+    $friend = $rows[0]['friend_name'] ?? 'unknown';
+    $session = $rows[0]['session_id'] ?? 'unknown';
+
+    $prompt = "You are an expert Arma Reforger server log analyst. Analyze the following log(s) from friend '$friend' (session '$session').\n\n" .
+        "Provide a concise, structured report in JSON with this shape exactly:\n" .
+        "{\"title\":\"...\",\"summary\":\"1-3 paragraphs overview\",\"findings\":[{\"severity\":\"critical|warning|info\",\"category\":\"crash|stutter|network|error|performance|other\",\"title\":\"...\",\"details\":\"...\"}]}\n\n" .
+        "Focus on: game crashes, exceptions, low FPS/stutter events, network timeouts, RCON/admin actions, and anything unusual. If nothing important, say so clearly.\n\n" .
+        "LOG CONTENT:\n" . $context . "\n\nReturn only valid JSON.";
+
+    $payload = [
+        'model'      => $model,
+        'max_tokens' => $maxTokens,
+        'messages'   => [
+            ['role' => 'user', 'content' => $prompt],
+        ],
+    ];
+
+    $ch = curl_init('https://api.anthropic.com/v1/messages');
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER     => [
+            'Content-Type: application/json',
+            'X-API-Key: ' . $apiKey,
+            'anthropic-version: 2023-06-01',
+        ],
+        CURLOPT_POSTFIELDS     => json_encode($payload),
+        CURLOPT_TIMEOUT        => 120,
+    ]);
+    $resp = curl_exec($ch);
+    $err = curl_error($ch);
+    curl_close($ch);
+    if ($resp === false || $err !== '') {
+        error_log('Claude API error: ' . $err);
+        return null;
+    }
+
+    $data = json_decode($resp, true);
+    if (empty($data['content'][0]['text'])) {
+        error_log('Claude API unexpected response: ' . $resp);
+        return null;
+    }
+
+    $text = $data['content'][0]['text'];
+    if (preg_match('/```json\s*(\{.*\})\s*```/s', $text, $m)) {
+        $text = $m[1];
+    }
+    $report = json_decode($text, true);
+    if (!is_array($report) || !isset($report['title'], $report['summary'], $report['findings'])) {
+        return [
+            'title'    => 'AI report',
+            'summary'  => $text,
+            'findings' => [],
+        ];
+    }
+    return $report;
+}
+
+function handle_reports(string $method): void {
+    if ($method !== 'GET') {
+        json_error('Method not allowed', 405);
+    }
+    $pdo = db();
+    $stmt = $pdo->query(
+        'SELECT r.id, r.title, r.summary, r.findings, r.model, r.created_at, f.name AS friend_name, s.session_id
+         FROM reports r
+         LEFT JOIN friends f ON f.id = r.friend_id
+         LEFT JOIN sessions s ON s.id = r.session_id
+         ORDER BY r.created_at DESC
+         LIMIT 50'
+    );
+    json_response(['ok' => true, 'reports' => $stmt->fetchAll()]);
 }
