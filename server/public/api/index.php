@@ -186,9 +186,18 @@ function handle_friend_request_reject(): void {
 }
 
 function handle_logs(string $method): void {
-    if ($method !== 'GET') {
-        json_error('Method not allowed', 405);
+    if ($method === 'GET') {
+        serve_logs_list();
+        return;
     }
+    if ($method === 'POST') {
+        serve_logs_zip();
+        return;
+    }
+    json_error('Method not allowed', 405);
+}
+
+function serve_logs_list(): void {
     $pdo = db();
     $friendId = isset($_GET['friend_id']) ? (int)$_GET['friend_id'] : null;
     $sessionId = isset($_GET['session_id']) ? (int)$_GET['session_id'] : null;
@@ -222,6 +231,56 @@ function handle_logs(string $method): void {
     $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
     $stmt->execute();
     json_response(['ok' => true, 'logs' => $stmt->fetchAll()]);
+}
+
+function serve_logs_zip(): void {
+    $pdo = db();
+    $input = json_decode(file_get_contents('php://input'), true) ?: [];
+    $ids = array_map('intval', (array)($input['ids'] ?? []));
+    if (empty($ids)) {
+        json_error('No log IDs selected');
+    }
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = $pdo->prepare(
+        "SELECT l.id, l.filename, f.name AS friend_name, s.session_id, l.storage_path
+         FROM logs l
+         JOIN friends f ON f.id = l.friend_id
+         LEFT JOIN sessions s ON s.id = l.session_id
+         WHERE l.id IN ($placeholders)"
+    );
+    $stmt->execute($ids);
+    $rows = $stmt->fetchAll();
+    if (empty($rows)) {
+        json_error('Logs not found', 404);
+    }
+
+    $tmp = tempnam(sys_get_temp_dir(), 'armalogs_zip_');
+    if ($tmp === false) {
+        json_error('Failed to create temp file', 500);
+    }
+    unlink($tmp);
+    $zip = new ZipArchive();
+    if ($zip->open($tmp, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+        json_error('Failed to create zip', 500);
+    }
+
+    $base = config('storage_dir', '/app/data/storage/logs');
+    foreach ($rows as $row) {
+        $path = rtrim($base, '/') . '/' . ltrim($row['storage_path'], '/');
+        if (!file_exists($path)) {
+            continue;
+        }
+        $arcName = ($row['friend_name'] ?? 'unknown') . '/' . ($row['session_id'] ?? 'unknown') . '/' . $row['filename'];
+        $zip->addFile($path, $arcName);
+    }
+    $zip->close();
+
+    header('Content-Type: application/zip');
+    header('Content-Disposition: attachment; filename="armalogs_' . date('Y-m-d_H-i-s') . '.zip"');
+    header('Content-Length: ' . filesize($tmp));
+    readfile($tmp);
+    unlink($tmp);
+    exit;
 }
 
 function handle_stats(): void {

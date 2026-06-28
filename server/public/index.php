@@ -38,6 +38,13 @@ $admin = current_admin();
     dialog input, dialog textarea{width:100%;padding:10px 12px;background:#0f1115;border:1px solid #2c303a;border-radius:6px;color:var(--text);font:inherit;margin-top:6px}
     dialog textarea{min-height:80px;resize:vertical}
     .dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+    .section-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .section-title h2{margin:0}
+    .checkbox-col{width:40px}
+    .toolbar{display:flex;gap:10px;margin-bottom:12px}
+    .toolbar .btn{padding:6px 12px;font-size:.85rem}
+    .filter-row{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+    .filter-row input, .filter-row select{padding:8px 12px;background:#0f1115;border:1px solid #2c303a;border-radius:6px;color:var(--text);font:inherit}
     .toast{position:fixed;bottom:20px;right:20px;background:var(--panel);border:1px solid var(--border);padding:14px 18px;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.3);display:none;max-width:420px}
   </style>
 </head>
@@ -84,12 +91,20 @@ $admin = current_admin();
     </section>
 
     <section style="margin-top:32px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <h2 style="margin:0">Recent logs</h2>
+      <div class="section-title">
+        <h2>Recent logs</h2>
+      </div>
+      <div class="toolbar">
+        <button class="btn" onclick="selectAllLogs(true)">Select all</button>
+        <button class="btn" onclick="selectAllLogs(false)">Deselect</button>
+        <button class="btn" onclick="downloadSelectedLogs()">Download .zip</button>
+      </div>
+      <div class="filter-row">
+        <input id="log-filter" placeholder="Search filename / session / friend" oninput="applyLogFilter()">
       </div>
       <table id="logs-table">
         <thead>
-          <tr><th>Time</th><th>Friend</th><th>Session</th><th>Filename</th><th>Size</th></tr>
+          <tr><th class="checkbox-col"><input type="checkbox" id="logs-select-all" onclick="selectAllLogs(this.checked)"></th><th>Time</th><th>Friend</th><th>Session</th><th>Filename</th><th>Size</th></tr>
         </thead>
         <tbody></tbody>
       </table>
@@ -159,13 +174,25 @@ $admin = current_admin();
         tbody.appendChild(tr);
       }
     }
+    let allLogs=[];
     async function loadLogs(){
       const data=await api('logs');
+      allLogs=data.logs;
+      applyLogFilter();
+    }
+    function applyLogFilter(){
+      const filter=document.getElementById('log-filter').value.toLowerCase();
+      const filtered=allLogs.filter(l=>
+        (l.friend_name||'').toLowerCase().includes(filter)||
+        (l.session_id||'').toLowerCase().includes(filter)||
+        (l.filename||'').toLowerCase().includes(filter)
+      );
       const tbody=document.querySelector('#logs-table tbody');
       tbody.innerHTML='';
-      for(const l of data.logs.slice(0,10)){
+      for(const l of filtered.slice(0,50)){
         const tr=document.createElement('tr');
         tr.innerHTML=`
+          <td><input type="checkbox" class="log-check" data-id="${l.id}"></td>
           <td>${new Date(l.uploaded_at).toLocaleString()}</td>
           <td>${escapeHtml(l.friend_name)}</td>
           <td><span class="token">${escapeHtml(l.session_id||'unknown')}</span></td>
@@ -173,6 +200,32 @@ $admin = current_admin();
           <td>${fmtBytes(l.file_size)}</td>`;
         tbody.appendChild(tr);
       }
+    }
+    function selectAllLogs(checked){
+      document.querySelectorAll('.log-check').forEach(cb=>cb.checked=checked);
+      document.getElementById('logs-select-all').checked=checked;
+    }
+    async function downloadSelectedLogs(){
+      const ids=Array.from(document.querySelectorAll('.log-check:checked')).map(cb=>parseInt(cb.dataset.id));
+      if(ids.length===0){showToast('No logs selected',true);return;}
+      try{
+        const r=await fetch('/api/?path=logs',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({ids})
+        });
+        if(!r.ok){throw new Error((await r.json()).error||'Download failed');}
+        const blob=await r.blob();
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.href=url;
+        a.download=`armalogs_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        showToast(`Downloaded ${ids.length} log(s)`);
+      }catch(e){showToast(e.message,true);}
     }
     function escapeHtml(s){return s.replace(/[<>&"']/g,c=>({'<':'\u0026lt;','>':'\u0026gt;','&':'\u0026amp;','"':'\u0026quot;',"'":'\u0026#39;'}[c]));}
 

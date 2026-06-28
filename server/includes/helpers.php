@@ -65,3 +65,11 @@ function env_bool(string $key, bool $default = false): bool {
     }
     return in_array(strtolower(trim((string)$val)), ['1', 'true', 'yes', 'on'], true);
 }
+
+function config(string $key, $default = null) {
+    static $cfg = null;
+    if ($cfg === null) {
+        $cfg = require INCLUDES_DIR . '/config.php';
+    }
+    return $cfg[$key] ?? $default;
+}
