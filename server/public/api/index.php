@@ -390,7 +390,7 @@ function handle_logs(string $method): void {
     json_error('Method not allowed', 405);
 }
 
-function handle_archive(): void {
+
     require_admin();
     $cfg = config();
     $days = (int)($cfg['archive']['log_retention_days'] ?? 30);
