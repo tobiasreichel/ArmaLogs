@@ -41,8 +41,9 @@ $admin = current_admin();
     .tree-group{margin-bottom:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden}
     .tree-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#111318;cursor:pointer;user-select:none}
     .tree-header:hover{background:#181b22}
-    .tree-header .title{font-weight:600}
+    .tree-header .title{font-weight:600;display:flex;align-items:center;gap:10px}
     .tree-header .meta{font-size:.8rem;color:var(--muted)}
+    .tree-header input[type="checkbox"]{cursor:pointer;margin:0;flex-shrink:0}
     .tree-body{display:none;background:var(--panel);padding-left:18px}
     .tree-body.open{display:block}
     .tree-body table{margin:0;border:0;border-radius:0}
@@ -276,10 +277,14 @@ $admin = current_admin();
           </div>
           <div class="tree-body">${g.sessions.map(sess=>{
             const sessTotal=sess.items.reduce((s,l)=>s+(l.file_size||0),0);
+            const allIds=sess.items.map(l=>l.id).join(',');
             return `
             <div class="tree-group" style="border:0;border-bottom:1px solid var(--border);margin-bottom:0">
               <div class="tree-header session-row" onclick="toggleTree(this)">
-                <div class="title" style="font-weight:500">${escapeHtml(sess.session)}</div>
+                <div class="title" style="font-weight:500;display:flex;align-items:center;gap:10px">
+                  <input type="checkbox" class="session-check" data-ids="${allIds}" onclick="selectSession(this)">
+                  ${escapeHtml(sess.session)}
+                </div>
                 <div class="meta">${sess.items.length} file${sess.items.length===1?'':'s'} · ${fmtBytes(sessTotal)}</div>
               </div>
               <div class="tree-body">
@@ -306,7 +311,20 @@ $admin = current_admin();
       document.querySelectorAll('.tree-body').forEach(b=>open?b.classList.add('open'):b.classList.remove('open'));
     }
     function selectGroup(cb){
-      cb.closest('.tree-group').querySelectorAll('.log-check').forEach(c=>c.checked=cb.checked);
+      const group=cb.closest('.tree-group');
+      const checked=cb.checked;
+      group.querySelectorAll('.log-check').forEach(c=>c.checked=checked);
+      if(group.querySelector('.session-check')) group.querySelector('.session-check').checked=checked;
+      if(window.event) window.event.stopPropagation();
+    }
+    function selectSession(cb){
+      const checked=cb.checked;
+      cb.dataset.ids.split(',').forEach(id=>{
+        const input=document.querySelector(`.log-check[data-id="${id}"]`);
+        if(input) input.checked=checked;
+      });
+      const group=cb.closest('.tree-group');
+      if(group.querySelector('.group-check')) group.querySelector('.group-check').checked=checked;
       if(window.event) window.event.stopPropagation();
     }
     async function downloadSelectedLogs(){
