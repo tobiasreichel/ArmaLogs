@@ -33,8 +33,9 @@ class TrayApp:
             create_image(),
             "ArmaLogs",
             menu=pystray.Menu(
-                pystray.MenuItem("Open config folder", self.open_config),
                 pystray.MenuItem("Upload now", self.upload_now),
+                pystray.MenuItem("Edit settings", self.edit_settings),
+                pystray.MenuItem("Open config folder", self.open_config),
                 pystray.MenuItem("Exit", self.exit),
             ),
         )
@@ -45,6 +46,17 @@ class TrayApp:
     def upload_now(self, icon, item):
         if self.watcher:
             threading.Thread(target=self.watcher.run_once, daemon=True).start()
+
+    def edit_settings(self, icon, item):
+        if self.watcher:
+            try:
+                self.watcher.stop()
+            except Exception:
+                pass
+            self.watcher = None
+        if run_setup_dialog():
+            self.cfg = default_config()
+            threading.Thread(target=self._watch, daemon=True).start()
 
     def exit(self, icon, item):
         if self.watcher:
