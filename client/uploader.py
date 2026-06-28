@@ -66,10 +66,13 @@ def upload_session(
         fields["workshop_mod_count"] = str(mod_count)
         logger.info("Detected %d Workshop mods for %s", mod_count, session_dir.name)
     mod_list = detect_workshop_mods(session_dir)
+    logger.info("workshop_mods for %s: %d entries", session_dir.name, len(mod_list))
     if mod_list:
         import json as _json
         fields["workshop_mods_json"] = _json.dumps([m.to_dict() for m in mod_list])
         logger.info("Sending %d mod entries for %s", len(mod_list), session_dir.name)
+    else:
+        logger.warning("No Workshop mods detected for %s; server will not show mod list", session_dir.name)
 
     opened: list[tuple[str, bytes, Path]] = []
     try:

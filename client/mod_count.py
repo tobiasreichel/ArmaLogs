@@ -33,26 +33,81 @@ def detect_workshop_mod_count(log_root: Path) -> Optional[int]:
 
 
 def detect_workshop_mods(log_root: Path) -> list[WorkshopMod]:
-    """Best-effort list of subscribed/loaded Workshop mods.
+    """Best-effort list of subscribed Workshop mods.
 
     Tries, in order:
-    1. Arma Reforger Launcher preset JSON (enabled addons list).
-    2. Steam workshop app manifest for appid 1874880.
-    3. Fallback: parse unique addon GUIDs from console.log (not Workshop, source='log').
+    1. Arma Reforger `addons` folder (e.g. `Documents\My Games\ArmaReforger\addons`).
+       Folder names are `ModName_WorkshopID` — the most reliable local source.
+    2. Arma Reforger Launcher preset JSON (enabled addons list).
+    3. Steam workshop app manifest for appid 1874880.
+
+    Does NOT fall back to console.log because that lists engine addon GUIDs,
+    not Workshop subscriptions.
     """
+    logger.debug("Detecting Workshop mods for log root: %s", log_root)
+
+    mods = _mods_from_addons_folder(log_root)
+    if mods:
+        logger.info("Using addons folder with %d Workshop mod(s)", len(mods))
+        return mods
+
     mods = _mods_from_launcher_preset(log_root)
     if mods:
+        logger.info("Using launcher preset with %d Workshop mod(s)", len(mods))
         return mods
 
     mods = _mods_from_steam_appworkshop()
     if mods:
+        logger.info("Using Steam appworkshop with %d Workshop mod(s)", len(mods))
         return mods
 
-    mods = _mods_from_console_log(log_root)
-    if mods:
-        return mods
-
+    logger.warning("No Workshop mod source found for %s", log_root)
     return []
+
+
+def _mods_from_addons_folder(log_root: Path) -> list[WorkshopMod]:
+    """Parse the local Arma Reforger addons folder for mod names + Workshop IDs."""
+    candidates: list[Path] = [
+        log_root.parent / "addons",
+        Path.home() / "Documents" / "My Games" / "ArmaReforger" / "addons",
+        Path.home() / "My Games" / "ArmaReforger" / "addons",
+    ]
+    seen: set[str] = set()
+    mods: list[WorkshopMod] = []
+    for addons_dir in candidates:
+        if not addons_dir.is_dir():
+            continue
+        logger.debug("Scanning addons folder: %s", addons_dir)
+        for entry in sorted(addons_dir.iterdir()):
+            if not entry.is_dir():
+                continue
+            name = entry.name.strip()
+            # Names are like: ModName_5E73C7BC12345678 or {ID} mod_name
+            m = re.match(r"^(.+?)_([A-Fa-f0-9]{16})$", name)
+            if m:
+                mod_name = m.group(1)
+                wid = m.group(2).upper()
+            else:
+                # Some folders are just the workshop ID, or no ID
+                m2 = re.match(r"^([A-Fa-f0-9]{16})$", name)
+                if m2:
+                    wid = m2.group(1).upper()
+                    mod_name = wid
+                else:
+                    # Look for .workshop_id file inside
+                    wid_file = entry / ".workshop_id"
+                    if wid_file.is_file():
+                        wid = wid_file.read_text(encoding="utf-8").strip()
+                        mod_name = name
+                    else:
+                        continue
+            key = wid.lower()
+            if key not in seen:
+                seen.add(key)
+                mods.append(WorkshopMod(wid, mod_name, "addons"))
+        if mods:
+            break
+    return mods
 
 
 def _mods_from_launcher_preset(log_root: Path) -> list[WorkshopMod]:

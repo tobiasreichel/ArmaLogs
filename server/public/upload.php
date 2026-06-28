@@ -79,7 +79,12 @@ if (!empty($_POST['workshop_mods_json'])) {
     $decoded = json_decode($_POST['workshop_mods_json'], true);
     if (is_array($decoded)) {
         $workshopModsJson = json_encode($decoded);
+        error_log('ArmaLogs upload: received ' . count($decoded) . ' workshop mods for session ' . ($sessionName ?? 'unknown'));
+    } else {
+        error_log('ArmaLogs upload: workshop_mods_json present but not a JSON array');
     }
+} else {
+    error_log('ArmaLogs upload: workshop_mods_json field missing for session ' . ($sessionName ?? 'unknown'));
 }
 
 $files = [];
