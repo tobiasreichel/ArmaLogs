@@ -3,7 +3,7 @@
 ;   "C:\Program Files (x86)\Inno Setup 6\iscc.exe" client\installer.iss
 
 #define MyAppName "ArmaLogs Client"
-#define MyAppVersion "1.2.0"
+#define MyAppVersion "1.2.1"
 #define MyAppPublisher "ArmaLogs"
 #define MyAppURL "https://armalogs.reichel.network"
 #define MyAppExeName "ArmaLogsClient.exe"

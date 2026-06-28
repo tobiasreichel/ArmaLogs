@@ -53,25 +53,31 @@ class Watcher:
                     found.append(child)
         return found
 
-    def run_once(self) -> None:
+    def run_once(self, force_session_ids: list[str] | None = None) -> None:
         server = self.cfg.get("server_url")
         token = self.cfg.get("token")
-        logger.info("run_once: server=%s token_set=%s", server, bool(token))
+        logger.info("run_once: server=%s token_set=%s force=%s", server, bool(token), bool(force_session_ids))
         if not server or not token:
             logger.error("Server URL or token missing; update config.json")
             return
         hostname = socket.gethostname()
-        sessions = self.discover_new_sessions()
-        logger.info("run_once: found %d new session(s)", len(sessions))
+        if force_session_ids:
+            root = Path(self.cfg.get("log_root"))
+            sessions = [root / sid for sid in force_session_ids if (root / sid).is_dir()]
+        else:
+            sessions = self.discover_new_sessions()
+        logger.info("run_once: found %d session(s)", len(sessions))
         for session_dir in sessions:
             logger.info("run_once: uploading %s", session_dir.name)
             try:
                 result = upload_session(server, token, session_dir, hostname)
                 if result.get("ok") or result.get("skipped"):
-                    self.cfg.set(
-                        "uploaded_sessions",
-                        list(set(self.cfg.get("uploaded_sessions", [])) | {session_dir.name}),
-                    )
+                    # Mark uploaded unless we're forcing a re-upload
+                    if not force_session_ids:
+                        self.cfg.set(
+                            "uploaded_sessions",
+                            list(set(self.cfg.get("uploaded_sessions", [])) | {session_dir.name}),
+                        )
                     logger.info("Uploaded %s: %s", session_dir.name, result)
                 else:
                     logger.error("Server rejected %s: %s", session_dir.name, result)
@@ -123,6 +129,18 @@ class Watcher:
     def _on_new_session(self, path: Path) -> None:
         logger.info("New session folder detected: %s", path)
         self.run_once()
+
+    def list_sessions(self) -> list[str]:
+        """Return all log session IDs currently on disk, newest first."""
+        root = Path(self.cfg.get("log_root"))
+        if not root.is_dir():
+            return []
+        sessions: list[Path] = []
+        for child in root.iterdir():
+            if child.is_dir() and LOG_SESSION_RE.match(child.name):
+                sessions.append(child)
+        sessions.sort(key=lambda p: p.name, reverse=True)
+        return [p.name for p in sessions]
 
     def stop(self) -> None:
         if self._observer:

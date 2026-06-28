@@ -1,5 +1,6 @@
 """Windows tray entry point for ArmaLogs client."""
 import logging
+import os
 import sys
 import threading
 import webbrowser
@@ -14,7 +15,10 @@ from .updater import check_update
 from .watcher import Watcher
 
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"
+
+
+logger = logging.getLogger("armalogs.tray")
 
 
 def create_image():
@@ -42,6 +46,7 @@ class TrayApp:
                 pystray.MenuItem(self._title, lambda icon, item: None, enabled=False),
                 pystray.MenuItem("", lambda icon, item: None, enabled=False),
                 pystray.MenuItem("Upload now", self.upload_now),
+                pystray.MenuItem("Force upload all sessions", self.force_upload_all),
                 pystray.MenuItem("Check for updates", self.check_updates),
                 pystray.MenuItem("Open install directory", self.open_install_dir),
                 pystray.MenuItem("Edit settings", self.edit_settings),
@@ -64,6 +69,17 @@ class TrayApp:
     def upload_now(self, icon, item):
         if self.watcher:
             threading.Thread(target=self.watcher.run_once, daemon=True).start()
+
+    def force_upload_all(self, icon, item):
+        if not self.watcher:
+            logger.warning("No watcher available; cannot force upload")
+            return
+        sessions = self.watcher.list_sessions()
+        if not sessions:
+            logger.info("No local sessions found to force-upload")
+            return
+        logger.info("Force uploading %d session(s): %s", len(sessions), sessions)
+        threading.Thread(target=lambda: self.watcher.run_once(force_session_ids=sessions), daemon=True).start()
 
     def check_updates(self, icon, item):
         def _do_check():
