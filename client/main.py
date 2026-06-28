@@ -42,6 +42,7 @@ class TrayApp:
                 pystray.MenuItem("", lambda icon, item: None, enabled=False),
                 pystray.MenuItem("Upload now", self.upload_now),
                 pystray.MenuItem("Check for updates", self.check_updates),
+                pystray.MenuItem("Open install directory", self.open_install_dir),
                 pystray.MenuItem("Edit settings", self.edit_settings),
                 pystray.MenuItem("Open config folder", self.open_config),
                 pystray.MenuItem("Exit", self.exit),
@@ -50,6 +51,14 @@ class TrayApp:
 
     def open_config(self, icon, item):
         webbrowser.open(f"file://{self.cfg.path.parent}")
+
+    def open_install_dir(self, icon, item):
+        try:
+            app_dir = Path(sys.executable).resolve().parent
+        except Exception:
+            app_dir = Path.cwd()
+        if app_dir.is_dir():
+            webbrowser.open(f"file://{app_dir}")
 
     def upload_now(self, icon, item):
         if self.watcher:
