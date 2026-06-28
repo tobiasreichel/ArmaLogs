@@ -10,10 +10,11 @@ from PIL import Image, ImageDraw
 
 from .config import default_config
 from .setup_dialog import run_setup_dialog
+from .updater import check_update
 from .watcher import Watcher
 
 
-__version__ = "1.0.0"
+__version__ = "1.1.1"
 
 
 def create_image():
@@ -31,11 +32,14 @@ class TrayApp:
         self.cfg = default_config()
         self.watcher: Watcher | None = None
         self._thread: threading.Thread | None = None
+        self._title = f"ArmaLogs v{__version__}"
         self.icon = pystray.Icon(
             "armalogs",
             create_image(),
-            "ArmaLogs",
+            self._title,
             menu=pystray.Menu(
+                pystray.MenuItem(self._title, lambda icon, item: None, enabled=False),
+                pystray.MenuItem.SEPARATOR,
                 pystray.MenuItem("Upload now", self.upload_now),
                 pystray.MenuItem("Check for updates", self.check_updates),
                 pystray.MenuItem("Edit settings", self.edit_settings),
@@ -86,7 +90,7 @@ class TrayApp:
             self.watcher.start()
         except Exception:
             logging.exception("Watcher crashed")
-            self.icon.title = "ArmaLogs — watcher error"
+            self.icon.title = f"ArmaLogs v{__version__} — watcher error"
 
 
 def main():
