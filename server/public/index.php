@@ -432,9 +432,10 @@ $admin = current_admin();
       for(const r of data.reports){
         const div=document.createElement('div');
         div.className='tree-group';
+        const scope = r.is_multi_friend ? 'multi-friend' : (r.is_multi_session ? 'multi-session' : `${escapeHtml(r.friend_name||'unknown')} / ${escapeHtml(r.session_id||'unknown')}`);
         div.innerHTML=`<div class="tree-header" onclick="toggleTree(this)">
           <div class="title">${escapeHtml(r.title||'Untitled report')}</div>
-          <div class="meta">${escapeHtml(r.friend_name||'unknown')} / ${escapeHtml(r.session_id||'unknown')} · ${new Date(r.created_at).toLocaleString()} · <button class="btn" style="padding:2px 8px;font-size:.75rem" onclick="downloadReportMarkdown(event,${r.id})">Download .md</button></div>
+          <div class="meta">${scope} · ${new Date(r.created_at).toLocaleString()} · <button class="btn" style="padding:2px 8px;font-size:.75rem" onclick="downloadReportMarkdown(event,${r.id})">Download .md</button></div>
         </div>
         <div class="tree-body" style="padding:16px">
           <div class="markdown" style="line-height:1.55">${mdToHtml(r.markdown || r.summary || '')}</div>

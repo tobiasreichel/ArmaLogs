@@ -339,6 +339,19 @@ function handle_analyze(): void {
         json_error('Logs not found', 404);
     }
 
+    // Sanity-check that selected log IDs actually belong to the requested friend/session scope.
+    $friendIds = [];
+    $sessionIds = [];
+    $rowIdMap = [];
+    foreach ($rows as $row) {
+        $friendIds[$row['friend_id']] = true;
+        $sessionIds[$row['session_db_id'] ?? 0] = true;
+        $rowIdMap[$row['id']] = $row;
+    }
+    if (count($ids) !== count($rowIdMap)) {
+        json_error('Some selected log IDs were not found or are not accessible', 400);
+    }
+
     $base = rtrim(config()['paths']['storage'] ?? '/app/data/storage/logs', '/');
     $maxChars = (int)($cfg['max_chars'] ?? 200_000);
     $context = "";
@@ -381,18 +394,22 @@ function handle_analyze(): void {
     }
 
     $first = $rows[0];
+    $multiFriend = count($friendIds) > 1;
+    $multiSession = count($sessionIds) > 1;
     $ins = $pdo->prepare(
-        'INSERT INTO reports (friend_id, session_id, log_ids, title, summary, findings, model, markdown) VALUES (:fid, :sid, :lids, :title, :summary, :findings, :model, :markdown)'
+        'INSERT INTO reports (friend_id, session_id, log_ids, title, summary, findings, model, markdown, is_multi_friend, is_multi_session) VALUES (:fid, :sid, :lids, :title, :summary, :findings, :model, :markdown, :multi_friend, :multi_session)'
     );
     $ins->execute([
-        ':fid'       => $first['friend_id'] ?? null,
-        ':sid'       => $first['session_db_id'] ?? null,
-        ':lids'      => json_encode($ids),
-        ':title'     => $report['title'],
-        ':summary'   => $report['summary'],
-        ':findings'  => json_encode($report['findings']),
-        ':model'     => $cfg['model'],
-        ':markdown'  => $report['markdown'] ?? '',
+        ':fid'          => $multiFriend ? null : ($first['friend_id'] ?? null),
+        ':sid'          => $multiSession ? null : ($first['session_db_id'] ?? null),
+        ':lids'         => json_encode($ids),
+        ':title'        => $report['title'],
+        ':summary'      => $report['summary'],
+        ':findings'     => json_encode($report['findings']),
+        ':model'        => $cfg['model'],
+        ':markdown'     => $report['markdown'] ?? '',
+        ':multi_friend'  => $multiFriend ? 1 : 0,
+        ':multi_session'=> $multiSession ? 1 : 0,
     ]);
 
     json_response([

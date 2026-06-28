@@ -75,6 +75,8 @@ CREATE TABLE IF NOT EXISTS reports (
     findings      JSON             NOT NULL,
     markdown      LONGTEXT         NULL,
     model         VARCHAR(64)      NOT NULL,
+    is_multi_friend  TINYINT(1) NOT NULL DEFAULT 0,
+    is_multi_session TINYINT(1) NOT NULL DEFAULT 0,
     created_at    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_reports_friend (friend_id),
     KEY idx_reports_session (session_id),
