@@ -11,6 +11,9 @@ config.json
 server/includes/config.php
 storage/
 
+.env
+.hermes/desktop-attachments/
+
 # IDE / OS
 .vscode/
 .idea/

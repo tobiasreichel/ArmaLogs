@@ -4,11 +4,13 @@
 Usage:
     python server/deploy/deploy.py
 
-Required environment variables:
-    ARMALOGS_SFTP_HOST
-    ARMALOGS_SFTP_PORT
-    ARMALOGS_SFTP_USER
-    ARMALOGS_SFTP_PASS
+Reads credentials from a `.env` file in the project root, falling back to
+environment variables. Put this in your `.env` (never commit it):
+
+    ARMALOGS_SFTP_HOST=my.reichel.network
+    ARMALOGS_SFTP_PORT=222
+    ARMALOGS_SFTP_USER=toreic@armalogs.reichel.network
+    ARMALOGS_SFTP_PASS=your_password
 
 Optional:
     ARMALOGS_PUBLIC_DIR  local public dir  (default: server/public)
@@ -20,12 +22,31 @@ from pathlib import Path
 
 import paramiko
 
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def load_env_file(path: Path) -> None:
+    """Load KEY=VALUE lines from a .env file into os.environ."""
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip('\'"')
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+load_env_file(ROOT / ".env")
+
 HOST = os.environ.get("ARMALOGS_SFTP_HOST", "")
 PORT = int(os.environ.get("ARMALOGS_SFTP_PORT", "22"))
 USER = os.environ.get("ARMALOGS_SFTP_USER", "")
 PASS = os.environ.get("ARMALOGS_SFTP_PASS", "")
 
-ROOT = Path(__file__).resolve().parents[2]
 LOCAL_PUBLIC = Path(os.environ.get("ARMALOGS_PUBLIC_DIR", ROOT / "server" / "public"))
 LOCAL_INCLUDES = Path(os.environ.get("ARMALOGS_INCLUDES_DIR", ROOT / "server" / "includes"))
 
@@ -46,7 +67,6 @@ def ensure_remote_dir(sftp: paramiko.SFTPClient, remote_path: str) -> None:
 
 
 def upload_dir(sftp: paramiko.SFTPClient, local: Path, remote: str) -> None:
-    # Create base dir first
     ensure_remote_dir(sftp, remote)
     for path in sorted(local.rglob("*"), key=lambda p: str(p)):
         rel = path.relative_to(local).as_posix()
@@ -61,7 +81,7 @@ def upload_dir(sftp: paramiko.SFTPClient, local: Path, remote: str) -> None:
 
 def main() -> int:
     if not all([HOST, USER, PASS]):
-        print("Set ARMALOGS_SFTP_HOST, ARMALOGS_SFTP_PORT, ARMALOGS_SFTP_USER, ARMALOGS_SFTP_PASS")
+        print("Set ARMALOGS_SFTP_HOST, ARMALOGS_SFTP_PORT, ARMALOGS_SFTP_USER, ARMALOGS_SFTP_PASS in .env or environment")
         return 1
 
     transport = paramiko.Transport((HOST, PORT))
