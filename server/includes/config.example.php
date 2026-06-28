@@ -16,8 +16,8 @@ return [
     ],
     'limits' => [
         'uploads_per_hour' => 50,
-        'bytes_per_day'    => 500 * 1024 * 1024,
-        'max_file_bytes'   => 100 * 1024 * 1024,
+        'bytes_per_day'    => 2 * 1024 * 1024 * 1024,
+        'max_file_bytes'   => 512 * 1024 * 1024,
     ],
     'security' => [
         'argon2id_options' => [

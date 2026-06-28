@@ -65,3 +65,28 @@ function env_bool(string $key, bool $default = false): bool {
     }
     return in_array(strtolower(trim((string)$val)), ['1', 'true', 'yes', 'on'], true);
 }
+
+function parse_ini_size(string $value): int {
+    $value = trim($value);
+    if ($value === '' || $value === '-1') {
+        return PHP_INT_MAX;
+    }
+    $last = strtolower(substr($value, -1));
+    $num = (int)$value;
+    switch ($last) {
+        case 'g': return $num * 1024 * 1024 * 1024;
+        case 'm': return $num * 1024 * 1024;
+        case 'k': return $num * 1024;
+        default:  return $num;
+    }
+}
+
+function fmt_bytes(int $bytes): string {
+    if ($bytes === 0) {
+        return '0 B';
+    }
+    $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    $i = (int)floor(log($bytes, 1024));
+    $i = max(0, min($i, count($units) - 1));
+    return round($bytes / (1024 ** $i), 2) . ' ' . $units[$i];
+}

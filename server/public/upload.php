@@ -12,6 +12,23 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_error('POST required', 405);
 }
 
+$cfg = config();
+$maxBytes = (int)($cfg['limits']['max_file_bytes'] ?? 512 * 1024 * 1024);
+$postMax = parse_ini_size(ini_get('post_max_size'));
+$uploadMax = parse_ini_size(ini_get('upload_max_filesize'));
+$effectiveServerMax = min($postMax, $uploadMax);
+if ($effectiveServerMax < $maxBytes) {
+    $maxBytes = $effectiveServerMax;
+}
+$contentLength = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+if ($contentLength > $postMax) {
+    json_error(sprintf(
+        'Upload too large: %s exceeds server post_max_size of %s. Reduce zip size or contact admin.',
+        fmt_bytes($contentLength),
+        fmt_bytes($postMax)
+    ), 413);
+}
+
 $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
 if ($authHeader === '') {
     $authHeader = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
