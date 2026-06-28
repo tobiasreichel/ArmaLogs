@@ -36,6 +36,7 @@ return [
     'ai' => [
         'enabled'     => false,
         'provider'    => 'anthropic',
+        'base_url'    => '',   // e.g. https://openlimits.app/v1/messages or https://api.openai.com/v1/chat/completions
         'api_key'     => '',
         'model'       => 'claude-3-5-sonnet-20241022',
         'max_tokens'  => 4096,

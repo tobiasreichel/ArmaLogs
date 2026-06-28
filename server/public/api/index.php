@@ -405,6 +405,7 @@ function call_claude(array $cfg, array $rows, string $context): ?array {
     $apiKey = $cfg['api_key'];
     $model = $cfg['model'];
     $maxTokens = (int)($cfg['max_tokens'] ?? 4096);
+    $baseUrl = rtrim($cfg['base_url'] ?? '', '/');
     $friend = $rows[0]['friend_name'] ?? 'unknown';
     $session = $rows[0]['session_id'] ?? 'unknown';
 
@@ -422,7 +423,8 @@ function call_claude(array $cfg, array $rows, string $context): ?array {
         ],
     ];
 
-    $ch = curl_init('https://api.anthropic.com/v1/messages');
+    $url = $baseUrl === '' ? 'https://api.anthropic.com/v1/messages' : $baseUrl . '/v1/messages';
+    $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_POST           => true,
         CURLOPT_RETURNTRANSFER => true,
