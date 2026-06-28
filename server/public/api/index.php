@@ -413,7 +413,7 @@ function call_claude(array $cfg, array $rows, string $context): ?array {
         " Analyze the following log(s) from friend '$friend' (session '$session').\n\n" .
         "Return a single JSON object and nothing else. Do not wrap in markdown code blocks. Do not add commentary outside JSON." .
         " The JSON must match this exact schema:\n" .
-        '{"title":"A short title, max 80 chars","summary":"2-4 sentences overview. What happened, was there a crash or major issue, and overall health.","findings":[{"severity":"critical|warning|info","category":"crash|stutter|network|error|performance|other","title":"Short finding title, max 80 chars","details":"Concise explanation with evidence from the log."}]}' .
+        '{"title":"A short title, max 80 chars","summary":"2-4 sentences overview with **bold** for key terms and \\n for line breaks. Markdown allowed: bold, lists, line breaks.","findings":[{"severity":"critical|warning|info","category":"crash|stutter|network|error|performance|other","title":"Short finding title, max 80 chars","details":"Concise explanation. Markdown allowed: **bold**, bullet lists with -, line breaks with \\n."}]}' .
         "\n\nUse severity 'critical' only for crashes, fatal exceptions, or game-breaking bugs." .
         " Use 'warning' for notable errors, missing assets, or performance concerns." .
         " Use 'info' for normal startup/shutdown and minor noise." .

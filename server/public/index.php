@@ -298,6 +298,13 @@ $admin = current_admin();
       }catch(e){showToast(e.message,true);}
     }
     const severityColor={critical:'var(--danger)',warning:'#ffaa00',info:'var(--success)'};
+    function mdToHtml(s){
+      if(!s) return '';
+      return escapeHtml(s)
+        .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+        .replace(/^\s*-\s+(.+)$/gm,'<li>$1</li>')
+        .replace(/\n/g,'<br>');
+    }
     async function loadReports(){
       const data=await api('reports');
       const list=document.getElementById('reports-list');
@@ -306,6 +313,7 @@ $admin = current_admin();
       for(const r of data.reports){
         let findings=[];
         try{findings=Array.isArray(r.findings)?r.findings:JSON.parse(r.findings||'[]');}catch(e){}
+        const summaryHtml=mdToHtml(r.summary||'').replace(/(<br>)+\s*(<li>)/g,'$2');
         const div=document.createElement('div');
         div.className='tree-group';
         div.innerHTML=`<div class="tree-header" onclick="toggleTree(this)">
@@ -313,15 +321,15 @@ $admin = current_admin();
           <div class="meta">${escapeHtml(r.friend_name||'unknown')} / ${escapeHtml(r.session_id||'unknown')} · ${new Date(r.created_at).toLocaleString()}</div>
         </div>
         <div class="tree-body" style="padding:16px">
-          <p style="line-height:1.5">${escapeHtml(r.summary||'').replace(/\n/g,'<br>')}</p>
+          <div class="markdown" style="line-height:1.55">${summaryHtml}</div>
           ${findings.length?'<div style="margin-top:14px"><h4 style="margin:0 0 10px">Findings</h4>'+findings.map(f=>`
-            <div class="finding" style="margin-bottom:12px;border-left:4px solid ${severityColor[f.severity]||'var(--muted)'};padding:8px 12px;background:#0f1115;border-radius:0 6px 6px 0">
+            <div class="finding" style="margin-bottom:12px;border-left:4px solid ${severityColor[f.severity]||'var(--muted)'};padding:10px 14px;background:#0f1115;border-radius:0 6px 6px 0">
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
                 <span style="font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;font-weight:600;color:${severityColor[f.severity]||'var(--muted)'}">${escapeHtml(f.severity||'info')}</span>
                 <span class="muted" style="font-size:.8rem">${escapeHtml(f.category||'other')}</span>
               </div>
               <strong style="display:block;margin-bottom:4px">${escapeHtml(f.title||'')}</strong>
-              <div style="font-size:.9rem;color:var(--muted);line-height:1.4">${escapeHtml(f.details||'').replace(/\n/g,'<br>')}</div>
+              <div class="markdown" style="font-size:.9rem;color:var(--muted);line-height:1.45">${mdToHtml(f.details||'')}</div>
             </div>`).join('')+'</div>':''}
         </div>`;
         list.appendChild(div);
