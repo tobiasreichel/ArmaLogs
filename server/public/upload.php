@@ -140,11 +140,23 @@ try {
             continue;
         }
 
-        $dir = ensure_storage_dir($storageBase, $friend['id']);
-        $ext = pathinfo($f['original'], PATHINFO_EXTENSION);
-        $safeExt = preg_replace('/[^a-zA-Z0-9]/', '', $ext) ?: 'log';
-        $dstName = $f['sha'] . '.' . $safeExt;
+        $dir = ensure_storage_dir($storageBase, $friend['name'], $sid);
+        $dstName = safe_storage_filename($f['original']);
+        // If a file with the same name already exists in this session, append a counter
         $dstPath = $dir . '/' . $dstName;
+        if (file_exists($dstPath)) {
+            $info = pathinfo($dstName);
+            $base = $info['filename'];
+            $ext = $info['extension'] ?? '';
+            $n = 1;
+            do {
+                $candidate = $base . '_' . $n . ($ext ? '.' . $ext : '');
+                $candidatePath = $dir . '/' . $candidate;
+                $n++;
+            } while (file_exists($candidatePath));
+            $dstName = $candidate;
+            $dstPath = $candidatePath;
+        }
         $relPath = substr($dstPath, strlen($storageBase));
 
         if (!move_uploaded_file($f['tmp'], $dstPath)) {

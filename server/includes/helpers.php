@@ -18,12 +18,23 @@ function html_safe(string $s): string {
     return htmlspecialchars($s, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 }
 
-function ensure_storage_dir(string $base, int $friendId): string {
-    $dir = $base . '/' . date('Y-m') . '/' . $friendId;
+function ensure_storage_dir(string $base, string $friendName, string $sessionId): string {
+    $safeFriend = preg_replace('/[^a-zA-Z0-9_-]/', '_', $friendName) ?: 'friend';
+    $safeSession = preg_replace('/[^a-zA-Z0-9_-]/', '_', $sessionId) ?: 'unknown';
+    $dir = $base . '/' . date('Y-m') . '/' . $safeFriend . '/' . $safeSession;
     if (!is_dir($dir) && !mkdir($dir, 0750, true) && !is_dir($dir)) {
         throw new RuntimeException('Unable to create storage directory');
     }
     return $dir;
+}
+
+function safe_storage_filename(string $original): string {
+    $info = pathinfo($original);
+    $base = $info['filename'] ?? 'file';
+    $ext = $info['extension'] ?? 'log';
+    $safeBase = preg_replace('/[^a-zA-Z0-9_-]/', '_', $base) ?: 'file';
+    $safeExt = preg_replace('/[^a-zA-Z0-9]/', '', $ext) ?: 'log';
+    return $safeBase . '.' . $safeExt;
 }
 
 function parse_session_id_from_filename(string $filename): ?string {
