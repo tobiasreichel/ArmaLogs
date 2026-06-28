@@ -146,7 +146,11 @@ $admin = current_admin();
       toast.style.display = 'block';
       setTimeout(()=>toast.style.display='none', 4000);
     }
-    async function api(path, options={}){
+    function escapeHtml(s){
+      if(s===null||s===undefined) return '';
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+    }
+    async function api(path, options={})
       const r = await fetch('/api/?path='+path, {headers:{'Accept':'application/json'}, ...options});
       const data = await r.json().catch(()=>({ok:false,error:'Invalid response'}));
       if(!data.ok) throw new Error(data.error || 'Request failed');
