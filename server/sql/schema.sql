@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS reports (
     title         VARCHAR(255)     NOT NULL,
     summary       TEXT             NOT NULL,
     findings      JSON             NOT NULL,
+    markdown      LONGTEXT         NULL,
     model         VARCHAR(64)      NOT NULL,
     created_at    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_reports_friend (friend_id),

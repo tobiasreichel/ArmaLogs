@@ -303,26 +303,44 @@ $admin = current_admin();
       tmp.innerHTML=html;
       return tmp.textContent||tmp.innerText||'';
     }
-    function downloadReportMarkdown(ev,id){
+        function downloadReportMarkdown(ev,id){
       ev.stopPropagation();
       const div=document.querySelector(`#reports-list .tree-group:has(.tree-header .meta button[onclick*="downloadReportMarkdown(event,${id})"])`);
       if(!div) return;
       const r=JSON.parse(div.dataset.report||'{}');
-      let findings=[];
-      try{findings=Array.isArray(r.findings)?r.findings:JSON.parse(r.findings||'[]');}catch(e){}
-      const date=new Date(r.created_at).toLocaleString();
-      let md=`# ${r.title||'Untitled report'}
+      let md = r.markdown || '';
+      if(!md){
+        let findings=[];
+        try{findings=Array.isArray(r.findings)?r.findings:JSON.parse(r.findings||'[]');}catch(e){}
+        const date=new Date(r.created_at).toLocaleString();
+        md=`# ${r.title||'Untitled report'}
 
 `;
-      md+=`- **Friend:** ${r.friend_name||'unknown'}\n`;
-      md+=`- **Session:** ${r.session_id||'unknown'}\n`;
-      md+=`- **Created:** ${date}\n`;
-      md+=`- **Model:** ${r.model||'unknown'}\n\n`;
-      md+=`## Summary\n\n${(r.summary||'').trim()}\n\n`;
-      if(findings.length){
-        md+=`## Findings\n\n`;
-        for(const f of findings){
-          md+=`### [${(f.severity||'info').toUpperCase()}] ${f.title||''} (${f.category||'other'})\n\n${(f.details||'').trim()}\n\n`;
+        md+=`- **Friend:** ${r.friend_name||'unknown'}
+`;
+        md+=`- **Session:** ${r.session_id||'unknown'}
+`;
+        md+=`- **Created:** ${date}
+`;
+        md+=`- **Model:** ${r.model||'unknown'}
+
+`;
+        md+=`## Summary
+
+${(r.summary||'').trim()}
+
+`;
+        if(findings.length){
+          md+=`## Findings
+
+`;
+          for(const f of findings){
+            md+=`### [${(f.severity||'info').toUpperCase()}] ${f.title||''} (${f.category||'other'})
+
+${(f.details||'').trim()}
+
+`;
+          }
         }
       }
       const blob=new Blob([md],{type:'text/markdown'});
@@ -336,7 +354,7 @@ $admin = current_admin();
       URL.revokeObjectURL(url);
     }
 
-    function mdToHtml(s){
+function mdToHtml(s){
       if(!s) return '';
       return escapeHtml(s)
         .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
@@ -349,9 +367,6 @@ $admin = current_admin();
       if(data.reports.length===0){list.innerHTML='<p class="muted">No reports yet. Select logs and click Analyze with AI.</p>';return;}
       list.innerHTML='';
       for(const r of data.reports){
-        let findings=[];
-        try{findings=Array.isArray(r.findings)?r.findings:JSON.parse(r.findings||'[]');}catch(e){}
-        const summaryHtml=mdToHtml(r.summary||'').replace(/(<br>)+\s*(<li>)/g,'$2');
         const div=document.createElement('div');
         div.className='tree-group';
         div.innerHTML=`<div class="tree-header" onclick="toggleTree(this)">
@@ -359,83 +374,11 @@ $admin = current_admin();
           <div class="meta">${escapeHtml(r.friend_name||'unknown')} / ${escapeHtml(r.session_id||'unknown')} · ${new Date(r.created_at).toLocaleString()} · <button class="btn" style="padding:2px 8px;font-size:.75rem" onclick="downloadReportMarkdown(event,${r.id})">Download .md</button></div>
         </div>
         <div class="tree-body" style="padding:16px">
-          <div class="markdown" style="line-height:1.55">${summaryHtml}</div>
-          ${findings.length?'<div style="margin-top:14px"><h4 style="margin:0 0 10px">Findings</h4>'+findings.map(f=>`
-            <div class="finding" style="margin-bottom:12px;border-left:4px solid ${severityColor[f.severity]||'var(--muted)'};padding:10px 14px;background:#0f1115;border-radius:0 6px 6px 0">
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-                <span style="font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;font-weight:600;color:${severityColor[f.severity]||'var(--muted)'}">${escapeHtml(f.severity||'info')}</span>
-                <span class="muted" style="font-size:.8rem">${escapeHtml(f.category||'other')}</span>
-              </div>
-              <strong style="display:block;margin-bottom:4px">${escapeHtml(f.title||'')}</strong>
-              <div class="markdown" style="font-size:.9rem;color:var(--muted);line-height:1.45">${mdToHtml(f.details||'')}</div>
-            </div>`).join('')+'</div>':''}
+          <div class="markdown" style="line-height:1.55">${mdToHtml(r.markdown || r.summary || '')}</div>
         </div>`;
         div.dataset.report = JSON.stringify(r);
         list.appendChild(div);
       }
-    }
-    function escapeHtml(s){return s.replace(/[<>&"']/g,c=>({'<':'\u0026lt;','>':'\u0026gt;','&':'\u0026amp;','"':'\u0026quot;',"'":'\u0026#39;'}[c]));}
-
-    const dialog=document.getElementById('friend-dialog');
-    function openFriendDialog(){document.getElementById('dialog-title').textContent='Add friend';document.getElementById('friend-name').value='';document.getElementById('friend-note').value='';document.getElementById('token-box').style.display='none';document.getElementById('friend-save').style.display='inline-block';dialog.showModal();}
-    function closeFriendDialog(){dialog.close();}
-    async function saveFriend(){
-      const name=document.getElementById('friend-name').value.trim();
-      const note=document.getElementById('friend-note').value.trim();
-      if(!name){showToast('Name is required', true);return;}
-      try{
-        const data=await api('friends',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,note})});
-        document.getElementById('friend-token').value=data.token;
-        document.getElementById('token-box').style.display='block';
-        document.getElementById('friend-save').style.display='none';
-        await loadFriends();loadStats();showToast('Friend created');
-      }catch(e){showToast(e.message,true);}
-    }
-    async function toggleFriend(id, active){
-      try{
-        await api('friends',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,is_active:active})});
-        await loadFriends();showToast(active?'Friend enabled':'Friend disabled');
-      }catch(e){showToast(e.message,true);}
-    }
-    async function deleteFriend(id,name){
-      if(!confirm(`Delete friend ${name}? Their logs will also be removed.`)) return;
-      try{
-        await api('friends',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
-        await loadFriends();loadStats();showToast('Friend deleted');
-      }catch(e){showToast(e.message,true);}
-    }
-    async function loadRequests(){
-      const data=await api('friend-requests');
-      const tbody=document.querySelector('#requests-table tbody');
-      tbody.innerHTML='';
-      if(data.requests.length===0){
-        tbody.innerHTML='<tr><td colspan="4" class="muted">No pending requests</td></tr>';
-        return;
-      }
-      for(const r of data.requests){
-        const tr=document.createElement('tr');
-        tr.innerHTML=`
-          <td>${escapeHtml(r.name)}</td>
-          <td>${escapeHtml(r.hostname||'—')}</td>
-          <td>${new Date(r.created_at).toLocaleString()}</td>
-          <td>
-            <button class="btn" style="padding:4px 8px;font-size:.75rem" onclick="approveRequest(${r.id})">Approve</button>
-            <button class="btn danger" style="padding:4px 8px;font-size:.75rem" onclick="rejectRequest(${r.id})">Reject</button>
-          </td>`;
-        tbody.appendChild(tr);
-      }
-    }
-    async function approveRequest(id){
-      try{
-        const data=await api('friend-requests-approve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
-        await loadRequests();await loadFriends();loadStats();showToast('Request approved');
-      }catch(e){showToast(e.message,true);}
-    }
-    async function rejectRequest(id){
-      try{
-        await api('friend-requests-reject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
-        await loadRequests();showToast('Request rejected');
-      }catch(e){showToast(e.message,true);}
     }
     (async()=>{await loadStats();await loadFriends();await loadRequests();await loadLogs();await loadReports();})();
   </script>

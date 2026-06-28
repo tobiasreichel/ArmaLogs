@@ -381,16 +381,17 @@ function handle_analyze(): void {
 
     $first = $rows[0];
     $ins = $pdo->prepare(
-        'INSERT INTO reports (friend_id, session_id, log_ids, title, summary, findings, model) VALUES (:fid, :sid, :lids, :title, :summary, :findings, :model)'
+        'INSERT INTO reports (friend_id, session_id, log_ids, title, summary, findings, model, markdown) VALUES (:fid, :sid, :lids, :title, :summary, :findings, :model, :markdown)'
     );
     $ins->execute([
-        ':fid'      => $first['friend_id'] ?? null,
-        ':sid'      => $first['session_db_id'] ?? null,
-        ':lids'     => json_encode($ids),
-        ':title'    => $report['title'],
-        ':summary'  => $report['summary'],
-        ':findings' => json_encode($report['findings']),
-        ':model'    => $cfg['model'],
+        ':fid'       => $first['friend_id'] ?? null,
+        ':sid'       => $first['session_db_id'] ?? null,
+        ':lids'      => json_encode($ids),
+        ':title'     => $report['title'],
+        ':summary'   => $report['summary'],
+        ':findings'  => json_encode($report['findings']),
+        ':model'     => $cfg['model'],
+        ':markdown'  => $report['markdown'] ?? '',
     ]);
 
     json_response([
@@ -409,35 +410,34 @@ function call_claude(array $cfg, array $rows, string $context): ?array {
     $friend = $rows[0]['friend_name'] ?? 'unknown';
     $session = $rows[0]['session_id'] ?? 'unknown';
 
-    $system = "You are an expert Arma Reforger server log analyst. You MUST return ONLY a single valid JSON object." .
-        " No markdown code fences, no prose before or after, no explanation." .
-        " The response must be parseable by json_decode() exactly.";
+    $system = "You are an expert Arma Reforger server log analyst." .
+        " Write a well-structured Markdown report with a title, summary, and a findings section." .
+        " Do not return JSON. Do not wrap the response in markdown code fences." .
+        " Return only the raw Markdown text.";
 
-    $example = json_encode([
-        'title'    => 'Short title (max 80 chars)',
-        'summary'  => '2-4 sentence overview. Use markdown **bold** and \\n line breaks. No bullet lists in summary.',
-        'findings' => [
-            [
-                'severity' => 'critical|warning|info',
-                'category' => 'crash|stutter|network|error|performance|other',
-                'title'    => 'Short finding title (max 80 chars)',
-                'details'  => 'Concise details. Markdown allowed: **bold**, line breaks \\n.',
-            ],
-        ],
-    ]);
-
-    $prompt = "Analyze the following log(s) from friend '$friend' (session '$session').\n\n" .
-        "Return EXACTLY this JSON shape (no markdown fences, no extra text):\n" .
-        $example . "\n\n" .
+    $prompt = "Analyze the following Arma Reforger log(s) from friend '$friend' (session '$session').\n\n" .
+        "Return a Markdown report exactly in this format:\n\n" .
+        "# Title\\n\\n" .
+        "## Summary\\n\\n" .
+        "2-4 sentence overview. Use **bold** for important terms. Use line breaks for readability.\\n\\n" .
+        "## Findings\\n\\n" .
+        "### :red_circle: Critical: Short title\\n" .
+        "Concise explanation. **Bold** key evidence.\\n\\n" .
+        "### :warning: Warning: Short title\\n" .
+        "Concise explanation.\\n\\n" .
+        "### :blue_circle: Info: Short title\\n" .
+        "Concise explanation.\\n\\n" .
         "Rules:\n" .
-        "- 'title': max 80 characters, plain text.\n" .
-        "- 'summary': 2-4 sentences. Use markdown **bold** for key terms and \\n for line breaks only. No bullet lists.\n" .
-        "- 'findings': array. Use 'critical' only for crashes/fatal exceptions. 'warning' for notable errors/performance. 'info' for minor noise. Categories: crash, stutter, network, error, performance, other.\n" .
-        "- 'findings[].title': max 80 chars, plain text.\n" .
-        "- 'findings[].details': 1-3 sentences, markdown **bold** and \\n allowed. No bullet lists.\n" .
-        "- If nothing important happened, set findings to [] and write a short summary.\n\n" .
+        "- Use '## Summary' and '## Findings' headers exactly.\n" .
+        "- Each finding starts with '### :red_circle: Critical:', '### :warning: Warning:', or '### :blue_circle: Info:' followed by a short title.\n" .
+        "- Only use 'Critical' for crashes, fatal exceptions, or game-breaking bugs.\n" .
+        "- Use 'Warning' for notable errors, missing assets, stutters, or performance issues.\n" .
+        "- Use 'Info' for minor noise, normal startup/shutdown, or cosmetic issues.\n" .
+        "- Keep titles under 80 characters.\n" .
+        "- Keep each finding details to 1-3 sentences.\n" .
+        "- If nothing important happened, write a short summary and omit the Findings section.\n\n" .
         "Focus on: game crashes, exceptions, low FPS/stutter events, network timeouts, RCON/admin actions.\n\n" .
-        "LOG CONTENT:\n" . $context . "\n\nReturn only valid JSON.";
+        "LOG CONTENT:\n" . $context . "\n\nReturn only raw Markdown.";
 
     $payload = [
         'model'      => $model,
@@ -476,44 +476,77 @@ function call_claude(array $cfg, array $rows, string $context): ?array {
         return null;
     }
 
-    $text = $data['content'][0]['text'];
-    if (preg_match('/```json\s*(\{.*\})\s*```/s', $text, $m)) {
-        $text = $m[1];
-    } elseif (preg_match('/(\{.*\})/s', $text, $m)) {
-        $text = $m[1];
+    $markdown = trim($data['content'][0]['text']);
+    if (preg_match('/^```markdown\s*(.*?)\s*```$/s', $markdown, $m)) {
+        $markdown = trim($m[1]);
+    } elseif (preg_match('/^```\s*(.*?)\s*```$/s', $markdown, $m)) {
+        $markdown = trim($m[1]);
     }
-    $report = json_decode($text, true);
-    if (!is_array($report) || !isset($report['title'], $report['summary'], $report['findings'])) {
-        $report = repair_report($text);
-    }
-    if (!is_array($report) || !isset($report['title'], $report['summary'], $report['findings'])) {
-        return [
-            'title'    => 'AI report',
-            'summary'  => "The model returned unstructured output. Raw text below:\n\n" . $text,
-            'findings' => [],
-        ];
-    }
-    if (!is_array($report['findings'])) {
-        $report['findings'] = [];
-    }
-    return $report;
+
+    $report = parse_markdown_report($markdown);
+    return [
+        'title'    => $report['title'] ?: 'AI report',
+        'summary'  => $report['summary'] ?: $markdown,
+        'findings' => $report['findings'],
+        'markdown' => $markdown,
+    ];
 }
 
-function repair_report(string $text): ?array {
-    // Try to fix common model malformations
-    $fixed = trim($text);
-    // Remove any trailing garbage after the closing }
-    $fixed = preg_replace('/^(\{.*\}).*$/s', '$1', $fixed);
-    // Fix missing comma between summary string and findings array when they abut
-    $fixed = preg_replace('/"summary"\s*:\s*"([^"\\]*(\\.[^"\\]*)*)"\s*"findings"/s', '"summary":"$1","findings"', $fixed);
-    // Fix missing comma between string value and next key
-    $fixed = preg_replace('/"([^"\\]*)"\s*:\s*"([^"\\]*(\\.[^"\\]*)*)"\s*"([^"]+?)"\s*:/s', '"$1":"$2","$4":', $fixed);
-    // Try decode
-    $arr = json_decode($fixed, true);
-    if (is_array($arr) && isset($arr['title'], $arr['summary'], $arr['findings'])) {
-        return $arr;
+function parse_markdown_report(string $markdown): array {
+    $title = '';
+    $summary = '';
+    $findings = [];
+
+    if (preg_match('/^#\s+(.+)$/m', $markdown, $m)) {
+        $title = trim($m[1]);
     }
-    return null;
+
+    if (preg_match('/##\s+Summary\s*\n(.*?)(?=\n##\s+Findings|\n###\s+[:\w]|$)/s', $markdown, $m)) {
+        $summary = trim($m[1]);
+    }
+
+    if (preg_match_all('/###\s+([^\n]+)\n(.*?)(?=\n###\s+|\n##\s+|\z)/s', $markdown, $m, PREG_SET_ORDER)) {
+        foreach ($m as $match) {
+            $heading = trim($match[1]);
+            $body = trim($match[2]);
+            $severity = 'info';
+            $category = 'other';
+            $findingTitle = $heading;
+
+            if (preg_match('/:red_circle:\s*Critical:\s*(.+)/i', $heading, $hm)) {
+                $severity = 'critical';
+                $findingTitle = trim($hm[1]);
+            } elseif (preg_match('/:warning:\s*Warning:\s*(.+)/i', $heading, $hm)) {
+                $severity = 'warning';
+                $findingTitle = trim($hm[1]);
+            } elseif (preg_match('/:blue_circle:\s*Info:\s*(.+)/i', $heading, $hm)) {
+                $severity = 'info';
+                $findingTitle = trim($hm[1]);
+            } elseif (preg_match('/Critical:\s*(.+)/i', $heading, $hm)) {
+                $severity = 'critical';
+                $findingTitle = trim($hm[1]);
+            } elseif (preg_match('/Warning:\s*(.+)/i', $heading, $hm)) {
+                $severity = 'warning';
+                $findingTitle = trim($hm[1]);
+            } elseif (preg_match('/Info:\s*(.+)/i', $heading, $hm)) {
+                $severity = 'info';
+                $findingTitle = trim($hm[1]);
+            }
+
+            $findings[] = [
+                'severity' => $severity,
+                'category' => $category,
+                'title'    => $findingTitle,
+                'details'  => $body,
+            ];
+        }
+    }
+
+    return [
+        'title'    => $title,
+        'summary'  => $summary,
+        'findings' => $findings,
+    ];
 }
 
 function handle_reports(string $method): void {
@@ -522,7 +555,7 @@ function handle_reports(string $method): void {
     }
     $pdo = db();
     $stmt = $pdo->query(
-        'SELECT r.id, r.title, r.summary, r.findings, r.model, r.created_at, f.name AS friend_name, s.session_id
+        'SELECT r.id, r.title, r.summary, r.findings, r.markdown, r.model, r.created_at, f.name AS friend_name, s.session_id
          FROM reports r
          LEFT JOIN friends f ON f.id = r.friend_id
          LEFT JOIN sessions s ON s.id = r.session_id
