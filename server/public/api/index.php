@@ -646,7 +646,7 @@ SYS;
     $userPrompt = "Analyze the following Arma Reforger log(s) from friend '$friend' (session '$session').\n\n" .
         "Return a Markdown report with:\n" .
         "1. A one-sentence TL;DR at the top.\n" .
-        "2. A ## Summary section (2-4 sentences).\n" .
+        "2. A ## Summary section (3-5 sentences). Bold the key mod names and class/function names. State what actually happened in the log, not speculation beyond the evidence.\n" .
         "3. A ## Findings section with severity-ranked subsections only if there is something actionable. Use ### Critical: ..., ### Warning: ..., ### Info: ....\n\n" .
         "Prioritize in this order:\n" .
         "1. Hard native crashes (.mdmp files, ENGINE (F): Crashed, heap corruption).\n" .
@@ -655,10 +655,16 @@ SYS;
         "4. Missing mod dependencies (Unknown class, Wrong GUID/name for resource).\n" .
         "5. FPS / memory degradation.\n" .
         "6. Cosmetic content warnings.\n\n" .
-        "For each Critical or Warning finding, state:\n" .
-        "- What likely broke (mod/class).\n" .
-        "- Why the log points to it.\n" .
-        "- The concrete next step to fix it.\n\n" .
+        "For each Critical or Warning finding, include:\n" .
+        "- **Impact score (1-5):** 5 = game unplayable / crash, 4 = major stutter or spawn broken, 3 = noticeable bug, 2 = minor annoyance, 1 = cosmetic only.\n" .
+        "- **Offending mod/class:** name the mod or class responsible.\n" .
+        "- **Workshop / addon IDs:** if the log mentions addon GUIDs like {A1B2C3D4...} or Workshop IDs, quote them.\n" .
+        "- **Evidence pattern:** one or two representative log lines or the exact error signature.\n" .
+        "- **Concrete fix:** the next step the admin should take.\n\n" .
+        "If the provided context includes multiple friends or multiple sessions for the same player, add a short ## Cross-Check section at the end noting:\n" .
+        "- Whether the same exceptions appear across sessions (getting worse, getting better, or new).\n" .
+        "- Whether the same issues hit multiple players at the same time (points to server/modset) vs one player only (points to client state or local config).\n\n" .
+        "Do not claim the mission ended, the game crashed to desktop, or players were kicked unless the log contains explicit evidence such as 'ENGINE (F): Crashed', a .mdmp file, or a clear disconnect line.\n\n" .
         "LOG CONTENT:\n" . $context . "\n\nReturn only raw Markdown.";
 
     $payload = [
