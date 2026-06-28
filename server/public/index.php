@@ -298,6 +298,44 @@ $admin = current_admin();
       }catch(e){showToast(e.message,true);}
     }
     const severityColor={critical:'var(--danger)',warning:'#ffaa00',info:'var(--success)'};
+    function stripHtml(html){
+      const tmp=document.createElement('div');
+      tmp.innerHTML=html;
+      return tmp.textContent||tmp.innerText||'';
+    }
+    function downloadReportMarkdown(ev,id){
+      ev.stopPropagation();
+      const div=document.querySelector(`#reports-list .tree-group:has(.tree-header .meta button[onclick*="downloadReportMarkdown(event,${id})"])`);
+      if(!div) return;
+      const r=JSON.parse(div.dataset.report||'{}');
+      let findings=[];
+      try{findings=Array.isArray(r.findings)?r.findings:JSON.parse(r.findings||'[]');}catch(e){}
+      const date=new Date(r.created_at).toLocaleString();
+      let md=`# ${r.title||'Untitled report'}
+
+`;
+      md+=`- **Friend:** ${r.friend_name||'unknown'}\n`;
+      md+=`- **Session:** ${r.session_id||'unknown'}\n`;
+      md+=`- **Created:** ${date}\n`;
+      md+=`- **Model:** ${r.model||'unknown'}\n\n`;
+      md+=`## Summary\n\n${(r.summary||'').trim()}\n\n`;
+      if(findings.length){
+        md+=`## Findings\n\n`;
+        for(const f of findings){
+          md+=`### [${(f.severity||'info').toUpperCase()}] ${f.title||''} (${f.category||'other'})\n\n${(f.details||'').trim()}\n\n`;
+        }
+      }
+      const blob=new Blob([md],{type:'text/markdown'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url;
+      a.download=`report_${r.id||id}_${(r.title||'report').replace(/\s+/g,'_').toLowerCase()}.md`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
     function mdToHtml(s){
       if(!s) return '';
       return escapeHtml(s)
@@ -318,7 +356,7 @@ $admin = current_admin();
         div.className='tree-group';
         div.innerHTML=`<div class="tree-header" onclick="toggleTree(this)">
           <div class="title">${escapeHtml(r.title||'Untitled report')}</div>
-          <div class="meta">${escapeHtml(r.friend_name||'unknown')} / ${escapeHtml(r.session_id||'unknown')} · ${new Date(r.created_at).toLocaleString()}</div>
+          <div class="meta">${escapeHtml(r.friend_name||'unknown')} / ${escapeHtml(r.session_id||'unknown')} · ${new Date(r.created_at).toLocaleString()} · <button class="btn" style="padding:2px 8px;font-size:.75rem" onclick="downloadReportMarkdown(event,${r.id})">Download .md</button></div>
         </div>
         <div class="tree-body" style="padding:16px">
           <div class="markdown" style="line-height:1.55">${summaryHtml}</div>
@@ -332,6 +370,7 @@ $admin = current_admin();
               <div class="markdown" style="font-size:.9rem;color:var(--muted);line-height:1.45">${mdToHtml(f.details||'')}</div>
             </div>`).join('')+'</div>':''}
         </div>`;
+        div.dataset.report = JSON.stringify(r);
         list.appendChild(div);
       }
     }
