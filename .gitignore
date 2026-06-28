@@ -16,3 +16,9 @@ storage/
 .idea/
 *.swp
 .DS_Store
+
+# PyInstaller
+client/build/
+client/dist/
+*.spec
+.venv/

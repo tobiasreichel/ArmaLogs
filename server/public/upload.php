@@ -13,6 +13,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+if ($authHeader === '') {
+    $authHeader = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+}
+if ($authHeader === '') {
+    $authHeader = apache_request_headers()['Authorization'] ?? '';
+}
 $token = '';
 if (preg_match('/^Bearer\s+(.+)$/i', $authHeader, $m)) {
     $token = $m[1];

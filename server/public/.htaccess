@@ -1,0 +1,18 @@
+RewriteEngine On
+
+# Pass Authorization header through to PHP (some Apache/mod_php setups strip it)
+RewriteCond %{HTTP:Authorization} ^(.*)$
+RewriteRule .* - [e=HTTP_AUTHORIZATION:%1]
+
+# Pretty URLs for admin API: /api/friends becomes /api/index.php?path=friends
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^api/([^/]+)/?$ api/index.php?path=$1 [QSA,L]
+
+# Optional: block direct access to includes if they ever land under public/
+RewriteRule ^includes/ - [F,L]
+
+# PHP settings (Cloudron may override these in php.ini, but harmless to ask)
+php_value upload_max_filesize 100M
+php_value post_max_size 110M
+php_value max_file_uploads 50
