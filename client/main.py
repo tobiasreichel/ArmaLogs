@@ -39,7 +39,7 @@ class TrayApp:
             self._title,
             menu=pystray.Menu(
                 pystray.MenuItem(self._title, lambda icon, item: None, enabled=False),
-                pystray.MenuItem.SEPARATOR,
+                pystray.MenuItem("", lambda icon, item: None, enabled=False),
                 pystray.MenuItem("Upload now", self.upload_now),
                 pystray.MenuItem("Check for updates", self.check_updates),
                 pystray.MenuItem("Edit settings", self.edit_settings),
