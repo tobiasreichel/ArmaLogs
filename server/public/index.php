@@ -231,7 +231,7 @@ $admin = current_admin();
 
     let allLogs=[];
     async function loadLogs(){
-      const data=await api('logs');
+      const data=await api('logs?limit=10000');
       allLogs=data.logs;
       applyLogFilter();
     }
