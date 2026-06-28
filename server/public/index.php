@@ -150,8 +150,15 @@ $admin = current_admin();
       if(s===null||s===undefined) return '';
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
     }
-    async function api(path, options={})
-      const r = await fetch('/api/?path='+path, {headers:{'Accept':'application/json'}, ...options});
+    async function api(path, options={}){
+      let url='/api/?path='+encodeURIComponent(path);
+      if(options.params){
+        for(const [k,v] of Object.entries(options.params)){
+          url+='&'+encodeURIComponent(k)+'='+encodeURIComponent(v);
+        }
+      }
+      const {params, ...rest} = options;
+      const r = await fetch(url, {headers:{'Accept':'application/json'}, ...rest});
       const data = await r.json().catch(()=>({ok:false,error:'Invalid response'}));
       if(!data.ok) throw new Error(data.error || 'Request failed');
       return data;
@@ -192,7 +199,7 @@ $admin = current_admin();
       }
     }
     async function loadRequests(){
-      const data=await api('friend-requests?status=all');
+      const data=await api('friend-requests',{params:{status:'all'}});
       const tbody=document.querySelector('#requests-table tbody');
       tbody.innerHTML='';
       const rows=data.requests||[];
