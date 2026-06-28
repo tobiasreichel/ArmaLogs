@@ -152,7 +152,11 @@ $admin = current_admin();
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
     }
     async function api(path, options={}){
-      let url='/api/?path='+encodeURIComponent(path);
+      const [basePath, query] = path.split('?');
+      let url='/api/?path='+encodeURIComponent(basePath);
+      if(query){
+        url+='&'+query;
+      }
       if(options.params){
         for(const [k,v] of Object.entries(options.params)){
           url+='&'+encodeURIComponent(k)+'='+encodeURIComponent(v);
