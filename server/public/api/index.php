@@ -639,15 +639,21 @@ Be ruthless about signal vs noise:
 - A .mdmp file with no VM exceptions in the same session is a native engine crash; note that and look at the previous session for the script-side trigger.
 
 Common root-cause patterns you MUST recognize:
-- SCR_CharacterCameraHandlerComponent::JWK_ShouldForceFirstPerson with m_iThirdPersonCameraMode NULL -> JWK Framework first-person camera hook; causes severe stutter. Usually triggered by a broken inventory/arsenal catalog.
-- SCR_InventoryMenuUI::UpdateItemInfoPosition per-frame null -> inventory UI stutter. Root cause is usually a weapon/attachment mod with missing UIInfo.
-- SCR_InventoryMenuUI::HighlightAvailableStorages / JWK_InfiniteInventoryComponent::OnItemRemoved_S / JWK_ShopInterfaceUIComponent::SetupCard null -> broken catalog entries from outdated weapon or JWK-dependent mods.
-- Unknown class 'ADSS_*' -> missing or outdated ADSSway - Core dependency, or Better Weapon Immersion 2.8 (BetterRecoil) injecting classes into vanilla weapon base prefabs.
-- component X cannot be combined with component Y followed by CreateEntityServer NULL -> vehicle/character prefab cannot spawn because two components conflict. Often caused by Car Radio4All injecting RadioBroadcastSoundComponent.
-- JWK_AmbientTrafficSystem spawn failures or AttachVehicle failed, missing VehicleRoadUserComponent on: NULL -> ambient traffic prefab missing components, cascades into JWK_BodiesGarbageCollectorGrid division-by-zero.
-- RVX_WeaponInfoManager::Init with mfdEntity NULL, SCR_MapWeatherUI::OnMapOpen/Close -> OH-58D Kiowa / MFD Framework version mismatch.
-- 0xc0000374 heap corruption in a session with no VM exceptions -> secondary crash; primary offender is usually in the previous session.
-- ENGINE (F): Crashed with a clear mod/prefab line just before it -> that mod is the immediate trigger.
+- `SCR_CharacterCameraHandlerComponent::JWK_ShouldForceFirstPerson` with `m_iThirdPersonCameraMode` NULL → JWK Framework first-person camera hook; causes severe stutter. Usually triggered by a broken inventory/arsenal catalog.
+- `SCR_InventoryMenuUI::UpdateItemInfoPosition` per-frame null → inventory UI stutter. Root cause is usually a weapon/attachment mod with missing `UIInfo`.
+- `SCR_InventoryMenuUI::HighlightAvailableStorages` / `JWK_InfiniteInventoryComponent::OnItemRemoved_S` / `JWK_ShopInterfaceUIComponent::SetupCard` null → broken catalog entries from outdated weapon or JWK-dependent mods.
+- `Unknown class 'ADSS_*'` → missing or outdated `ADSSway - Core` dependency, or `Better Weapon Immersion 2.8` (`BetterRecoil`) mod injecting classes into vanilla weapon base prefabs.
+- `component X cannot be combined with component Y` followed by `CreateEntityServer` NULL → vehicle/character prefab cannot spawn because two components conflict. Often caused by `Car Radio4All` injecting `RadioBroadcastSoundComponent`.
+- `JWK_AmbientTrafficSystem` spawn failures or `AttachVehicle failed, missing VehicleRoadUserComponent on: NULL` → ambient traffic prefab missing components, cascades into `JWK_BodiesGarbageCollectorGrid` division-by-zero.
+- `RVX_WeaponInfoManager::Init` with `mfdEntity` NULL, `SCR_MapWeatherUI::OnMapOpen/Close` → OH-58D Kiowa / MFD Framework version mismatch.
+- `0xc0000374` heap corruption in a session with no VM exceptions → secondary crash; primary offender is usually in the previous session.
+- `ENGINE (F): Crashed` with a clear mod/prefab line just before it → that mod is the immediate trigger.
+
+Mod-count rules:
+- Use the exact number from the log line `Loaded mission headers from N addon(s)!` when reporting how many addons were loaded.
+- Do not round to vague terms like "300+" or "hundreds of mods". State the exact N.
+- The count of unique addon GUIDs appearing anywhere in the log may be higher than the loaded count; report it separately as "N addons referenced/available, M loaded" only if you have both numbers.
+- If multiple sessions are compared, give the loaded addon count for each session separately. Never attribute one session's mod count to another session.
 
 Output rules:
 - Use only Markdown. No JSON. No markdown code fences around the whole report.
