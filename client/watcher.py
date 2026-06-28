@@ -49,11 +49,15 @@ class Watcher:
     def run_once(self) -> None:
         server = self.cfg.get("server_url")
         token = self.cfg.get("token")
+        logger.info("run_once: server=%s token_set=%s", server, bool(token))
         if not server or not token:
             logger.error("Server URL or token missing; update config.json")
             return
         hostname = socket.gethostname()
-        for session_dir in self.discover_new_sessions():
+        sessions = self.discover_new_sessions()
+        logger.info("run_once: found %d new session(s)", len(sessions))
+        for session_dir in sessions:
+            logger.info("run_once: uploading %s", session_dir.name)
             try:
                 result = upload_session(server, token, session_dir, hostname)
                 if result.get("ok") or result.get("skipped"):

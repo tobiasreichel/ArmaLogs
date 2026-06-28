@@ -75,6 +75,7 @@ def upload_session(
         for attempt in range(retries):
             try:
                 headers = {"Authorization": f"Bearer {token}", "X-Friend-Token": token}
+                logger.info("POST %s files=%d attempt=%d", server_url, len(payload_files), attempt + 1)
                 resp = requests.post(
                     server_url,
                     files=payload_files,
@@ -82,8 +83,11 @@ def upload_session(
                     headers=headers,
                     timeout=timeout,
                 )
+                logger.info("POST %s -> %d %s len=%d", server_url, resp.status_code, resp.reason, len(resp.text))
                 resp.raise_for_status()
-                return resp.json()
+                data = resp.json()
+                logger.info("Server response: %s", data)
+                return data
             except requests.RequestException as exc:
                 last_error = exc
                 logger.warning("Upload attempt %d failed: %s", attempt + 1, exc)

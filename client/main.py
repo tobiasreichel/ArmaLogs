@@ -81,11 +81,19 @@ class TrayApp:
 
 
 def main():
+    log_dir = Path.home() / ".armalogs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "client.log"
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)],
+        handlers=[
+            logging.FileHandler(str(log_file), mode="a", encoding="utf-8"),
+            logging.StreamHandler(sys.stdout),
+        ],
     )
+    logger = logging.getLogger("armalogs.tray")
+    logger.info("Log file: %s", log_file)
     app = TrayApp()
     app.run()
 
