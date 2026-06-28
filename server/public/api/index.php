@@ -810,17 +810,29 @@ function parse_markdown_report(string $markdown): array {
 }
 
 function handle_reports(string $method): void {
-    if ($method !== 'GET') {
-        json_error('Method not allowed', 405);
-    }
     $pdo = db();
-    $stmt = $pdo->query(
-        'SELECT r.id, r.title, r.summary, r.findings, r.markdown, r.model, r.created_at, f.name AS friend_name, s.session_id
-         FROM reports r
-         LEFT JOIN friends f ON f.id = r.friend_id
-         LEFT JOIN sessions s ON s.id = r.session_id
-         ORDER BY r.created_at DESC
-         LIMIT 50'
-    );
-    json_response(['ok' => true, 'reports' => $stmt->fetchAll()]);
+    if ($method === 'GET') {
+        $stmt = $pdo->query(
+            'SELECT r.id, r.title, r.summary, r.findings, r.markdown, r.model, r.created_at, f.name AS friend_name, s.session_id, r.is_multi_friend, r.is_multi_session
+             FROM reports r
+             LEFT JOIN friends f ON f.id = r.friend_id
+             LEFT JOIN sessions s ON s.id = r.session_id
+             ORDER BY r.created_at DESC
+             LIMIT 1000'
+        );
+        json_response(['ok' => true, 'reports' => $stmt->fetchAll()]);
+        return;
+    }
+    if ($method === 'DELETE') {
+        $input = json_decode(file_get_contents('php://input'), true) ?: [];
+        $id = (int)($input['id'] ?? 0);
+        if ($id <= 0) {
+            json_error('ID required');
+        }
+        $stmt = $pdo->prepare('DELETE FROM reports WHERE id = :id');
+        $stmt->execute([':id' => $id]);
+        json_response(['ok' => true, 'deleted' => $stmt->rowCount()]);
+        return;
+    }
+    json_error('Method not allowed', 405);
 }
