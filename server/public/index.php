@@ -114,6 +114,7 @@ $admin = current_admin();
         <button class="btn" onclick="expandAllTrees(false)">Collapse all</button>
         <button class="btn" onclick="downloadSelectedLogs()">Download .zip</button>
         <button class="btn" onclick="analyzeSelectedLogs()">Analyze with AI</button>
+        <button class="btn" style="margin-left:auto" onclick="runArchive()">Archive logs older than 30d</button>
       </div>
       <div class="filter-row" style="margin-bottom:12px">
         <input id="log-filter" placeholder="Search filename / session / friend" oninput="applyLogFilter()">
@@ -289,7 +290,7 @@ $admin = current_admin();
                   <input type="checkbox" class="session-check" data-ids="${allIds}" onclick="selectSession(this)">
                   ${escapeHtml(sess.session)}
                 </div>
-                <div class="meta">${sess.items.length} file${sess.items.length===1?'':'s'} · ${fmtBytes(sessTotal)}</div>
+                <div class="meta">${sess.items.length} file${sess.items.length===1?'':'s'} · ${fmtBytes(sessTotal)}${sess.items[0]?.workshop_mod_count ? ` · ${sess.items[0].workshop_mod_count} Workshop mods` : ''}</div>
               </div>
               <div class="tree-body">
                 <table>
@@ -470,6 +471,16 @@ $admin = current_admin();
       document.body.appendChild(a);
       a.click();
       a.remove();
+    }
+
+    async function runArchive(){
+      if(!confirm('Delete all raw log files and sessions older than the configured retention? AI reports are kept.')) return;
+      try{
+        const res = await api('archive',{method:'POST'});
+        showToast(`Archived ${res.deleted_files} files (${fmtBytes(res.deleted_bytes)}) and ${res.deleted_session_rows} empty sessions`);
+        loadLogs();
+        loadStats();
+      }catch(err){showToast(err.message,true);}
     }
 
     async function shareReport(e,id){

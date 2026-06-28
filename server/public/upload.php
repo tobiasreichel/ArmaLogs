@@ -70,6 +70,10 @@ $maxBytes = (int)($cfg['limits']['max_file_bytes'] ?? 100 * 1024 * 1024);
 $host = $_SERVER['REMOTE_ADDR'] ?? 'cli';
 $sessionName = $_POST['session_id'] ?? $_POST['session'] ?? null;
 $clientHostname = $_POST['hostname'] ?? null;
+$workshopModCount = null;
+if (isset($_POST['workshop_mod_count']) && is_numeric($_POST['workshop_mod_count'])) {
+    $workshopModCount = (int)$_POST['workshop_mod_count'];
+}
 
 $files = [];
 $uploadCount = count($_FILES['logs']['tmp_name']);
@@ -104,13 +108,14 @@ try {
 
     // Create or update session record
     $stmtSession = $pdo->prepare(
-        'INSERT INTO sessions (friend_id, session_id, client_hostname, uploaded_at, log_count, total_bytes)
-         VALUES (:friend_id, :session_id, :hostname, NOW(), 0, 0)
+        'INSERT INTO sessions (friend_id, session_id, client_hostname, uploaded_at, log_count, total_bytes, workshop_mod_count)
+         VALUES (:friend_id, :session_id, :hostname, NOW(), 0, 0, :wmc)
          ON DUPLICATE KEY UPDATE
            client_hostname = COALESCE(VALUES(client_hostname), client_hostname),
            uploaded_at = NOW(),
            log_count = log_count + VALUES(log_count),
-           total_bytes = total_bytes + VALUES(total_bytes)'
+           total_bytes = total_bytes + VALUES(total_bytes),
+           workshop_mod_count = COALESCE(VALUES(workshop_mod_count), workshop_mod_count)'
     );
 
     $stmtLog = $pdo->prepare(
@@ -136,6 +141,7 @@ try {
             ':friend_id'  => $friend['id'],
             ':session_id' => $sid,
             ':hostname'   => $clientHostname,
+            ':wmc'        => $workshopModCount,
         ]);
 
         $stmt = $pdo->prepare('SELECT id FROM sessions WHERE friend_id = :f AND session_id = :s LIMIT 1');

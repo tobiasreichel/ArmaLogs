@@ -31,6 +31,8 @@ if ($path === 'friends') {
     handle_log_content();
 } elseif ($path === 'session-timeline') {
     handle_session_timeline();
+} elseif ($path === 'archive') {
+    handle_archive();
 } elseif ($path === 'stats') {
     handle_stats();
 } else {
@@ -157,6 +159,67 @@ function parse_log_timeline(string $text): array {
         }
     }
     return $events;
+}
+
+function handle_archive(): void {
+    require_admin();
+    $cfg = config();
+    $days = (int)($cfg['archive']['log_retention_days'] ?? 30);
+    if ($days <= 0) {
+        json_error('log_retention_days must be > 0');
+    }
+    $pdo = db();
+    $cutoff = date('Y-m-d H:i:s', strtotime("-{$days} days"));
+
+    $stmt = $pdo->prepare(
+        'SELECT id, storage_path, session_id, friend_id FROM logs WHERE uploaded_at < :cutoff ORDER BY id'
+    );
+    $stmt->execute([':cutoff' => $cutoff]);
+    $rows = $stmt->fetchAll();
+
+    $storageBase = rtrim($cfg['paths']['storage'] ?? '/app/data/storage/logs', '/');
+    $deletedFiles = 0;
+    $deletedBytes = 0;
+    $logIds = [];
+    foreach ($rows as $row) {
+        $path = $storageBase . '/' . ltrim($row['storage_path'], '/');
+        if (file_exists($path)) {
+            $size = filesize($path);
+            if (unlink($path)) {
+                $deletedFiles++;
+                $deletedBytes += $size;
+            }
+        }
+        $logIds[] = (int)$row['id'];
+    }
+
+    if (!empty($logIds)) {
+        $placeholders = implode(',', array_fill(0, count($logIds), '?'));
+        $pdo->prepare("DELETE FROM logs WHERE id IN ($placeholders)")->execute($logIds);
+    }
+
+    // Clean up empty session directories older than cutoff if they have no logs left
+    $stmt = $pdo->prepare(
+        'SELECT s.id, s.friend_id, s.session_id FROM sessions s
+         LEFT JOIN logs l ON l.session_id = s.id
+         WHERE s.uploaded_at < :cutoff AND l.id IS NULL'
+    );
+    $stmt->execute([':cutoff' => $cutoff]);
+    $emptySessions = $stmt->fetchAll();
+    $sessionIds = array_map(fn($r) => (int)$r['id'], $emptySessions);
+    if (!empty($sessionIds)) {
+        $placeholders = implode(',', array_fill(0, count($sessionIds), '?'));
+        $pdo->prepare("DELETE FROM sessions WHERE id IN ($placeholders)")->execute($sessionIds);
+    }
+
+    json_response([
+        'ok' => true,
+        'cutoff' => $cutoff,
+        'deleted_files' => $deletedFiles,
+        'deleted_bytes' => $deletedBytes,
+        'deleted_log_rows' => count($logIds),
+        'deleted_session_rows' => count($sessionIds),
+    ]);
 }
 
 function handle_friends(string $method): void {
@@ -327,6 +390,66 @@ function handle_logs(string $method): void {
     json_error('Method not allowed', 405);
 }
 
+function handle_archive(): void {
+    require_admin();
+    $cfg = config();
+    $days = (int)($cfg['archive']['log_retention_days'] ?? 30);
+    if ($days <= 0) {
+        json_error('log_retention_days must be > 0');
+    }
+    $pdo = db();
+    $cutoff = date('Y-m-d H:i:s', strtotime("-{$days} days"));
+
+    $stmt = $pdo->prepare(
+        'SELECT id, storage_path, session_id, friend_id FROM logs WHERE uploaded_at < :cutoff ORDER BY id'
+    );
+    $stmt->execute([':cutoff' => $cutoff]);
+    $rows = $stmt->fetchAll();
+
+    $storageBase = rtrim($cfg['paths']['storage'] ?? '/app/data/storage/logs', '/');
+    $deletedFiles = 0;
+    $deletedBytes = 0;
+    $logIds = [];
+    foreach ($rows as $row) {
+        $path = $storageBase . '/' . ltrim($row['storage_path'], '/');
+        if (file_exists($path)) {
+            $size = filesize($path);
+            if (unlink($path)) {
+                $deletedFiles++;
+                $deletedBytes += $size;
+            }
+        }
+        $logIds[] = (int)$row['id'];
+    }
+
+    if (!empty($logIds)) {
+        $placeholders = implode(',', array_fill(0, count($logIds), '?'));
+        $pdo->prepare("DELETE FROM logs WHERE id IN ($placeholders)")->execute($logIds);
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT s.id, s.friend_id, s.session_id FROM sessions s
+         LEFT JOIN logs l ON l.session_id = s.id
+         WHERE s.uploaded_at < :cutoff AND l.id IS NULL'
+    );
+    $stmt->execute([':cutoff' => $cutoff]);
+    $emptySessions = $stmt->fetchAll();
+    $sessionIds = array_map(fn($r) => (int)$r['id'], $emptySessions);
+    if (!empty($sessionIds)) {
+        $placeholders = implode(',', array_fill(0, count($sessionIds), '?'));
+        $pdo->prepare("DELETE FROM sessions WHERE id IN ($placeholders)")->execute($sessionIds);
+    }
+
+    json_response([
+        'ok' => true,
+        'cutoff' => $cutoff,
+        'deleted_files' => $deletedFiles,
+        'deleted_bytes' => $deletedBytes,
+        'deleted_log_rows' => count($logIds),
+        'deleted_session_rows' => count($sessionIds),
+    ]);
+}
+
 function serve_logs_list(): void {
     $pdo = db();
     $friendId = isset($_GET['friend_id']) ? (int)$_GET['friend_id'] : null;
@@ -335,7 +458,7 @@ function serve_logs_list(): void {
     if ($limit < 0) { $limit = 50; }
     if ($limit > 0 && $limit > 10000) { $limit = 10000; }
     $offset = (int)($_GET['offset'] ?? 0);
-    $sql = 'SELECT l.id, l.friend_id, l.session_id AS session_db_id, s.session_id,
+    $sql = 'SELECT l.id, l.friend_id, l.session_id AS session_db_id, s.session_id, s.workshop_mod_count,
                    f.name AS friend_name, l.filename, l.file_size, l.content_sha256,
                    l.client_timestamp, l.uploaded_at, l.storage_path
             FROM logs l

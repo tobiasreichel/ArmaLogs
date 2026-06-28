@@ -19,6 +19,9 @@ return [
         'bytes_per_day'    => 2 * 1024 * 1024 * 1024,
         'max_file_bytes'   => 512 * 1024 * 1024,
     ],
+    'archive' => [
+        'log_retention_days' => 30,
+    ],
     'security' => [
         'argon2id_options' => [
             'memory_cost' => 65536,

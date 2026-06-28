@@ -11,7 +11,9 @@ import requests
 logger = logging.getLogger("armalogs.uploader")
 
 
-LOG_SESSION_RE = re.compile(r"logs_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}")
+from .mod_count import detect_workshop_mod_count
+
+LOG_SESSION_RE = re.compile(r"logs_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}");
 
 
 def sha256_file(path: Path) -> str:
@@ -59,6 +61,10 @@ def upload_session(
     fields = {"session_id": session_id or "unknown"}
     if hostname:
         fields["hostname"] = hostname
+    mod_count = detect_workshop_mod_count(session_dir)
+    if mod_count is not None:
+        fields["workshop_mod_count"] = str(mod_count)
+        logger.info("Detected %d Workshop mods for %s", mod_count, session_dir.name)
 
     opened: list[tuple[str, bytes, Path]] = []
     try:
