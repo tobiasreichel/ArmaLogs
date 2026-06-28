@@ -6,7 +6,7 @@
 # Output: client/dist/ArmaLogsClient.exe
 
 param(
-    [string]$Name = "ArmaLogsClient"
+    [string]$Spec = "ArmaLogsClient.spec"
 )
 
 $ErrorActionPreference = "Stop"
@@ -20,14 +20,9 @@ try {
 
     .venv\Scripts\python -m pip install -r requirements.txt pyinstaller
 
-    .venv\Scripts\python -m PyInstaller `
-        --onefile `
-        --noconsole `
-        --name $Name `
-        --add-data "config.json.example;." `
-        main.py
+    .venv\Scripts\python -m PyInstaller ArmaLogsClient.spec --noconfirm --clean
 
-    Write-Host "Build complete: dist\$Name.exe" -ForegroundColor Green
+    Write-Host "Build complete: dist\ArmaLogsClient.exe" -ForegroundColor Green
 } finally {
     Pop-Location
 }

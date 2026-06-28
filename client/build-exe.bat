@@ -10,15 +10,8 @@ if not exist .venv (
 
 .venv\Scripts\python -m pip install -r requirements.txt pyinstaller -q
 
-.venv\Scripts\python -m PyInstaller ^
-    --onefile ^
-    --noconsole ^
-    --name ArmaLogsClient ^
-    --icon NONE ^
-    --add-data "config.json.example;." ^
-    main.py
+.venv\Scripts\python -m PyInstaller ArmaLogsClient.spec --noconfirm --clean
 
 echo.
 echo Build complete: dist\ArmaLogsClient.exe
 popd
-pause
