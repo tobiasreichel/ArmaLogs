@@ -104,10 +104,15 @@ class Watcher:
         logger.info("Watching %s", root)
 
         interval = int(self.cfg.get("scan_interval_seconds", 30))
+        update_interval_seconds = 3600
+        last_update_check = time.time()
         try:
             while True:
                 time.sleep(interval)
                 self.run_once()
+                if time.time() - last_update_check >= update_interval_seconds:
+                    last_update_check = time.time()
+                    threading.Thread(target=self.check_update_now, daemon=True).start()
         except KeyboardInterrupt:
             self.stop()
 
