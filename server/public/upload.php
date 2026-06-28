@@ -1,10 +1,12 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../includes/config.php';
-require_once __DIR__ . '/../includes/db.php';
-require_once __DIR__ . '/../includes/auth.php';
-require_once __DIR__ . '/../includes/helpers.php';
+require_once __DIR__ . '/_init.php';
+
+require_once INCLUDES_DIR . '/config.php';
+require_once INCLUDES_DIR . '/db.php';
+require_once INCLUDES_DIR . '/auth.php';
+require_once INCLUDES_DIR . '/helpers.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_error('POST required', 405);

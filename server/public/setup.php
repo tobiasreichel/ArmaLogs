@@ -1,8 +1,10 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../includes/db.php';
-require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/_init.php';
+
+require_once INCLUDES_DIR . '/db.php';
+require_once INCLUDES_DIR . '/auth.php';
 
 $cfg = config();
 $enabled = $cfg['setup']['enabled'] ?? true;
