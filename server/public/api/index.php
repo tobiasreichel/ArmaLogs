@@ -612,33 +612,52 @@ function call_ollama(array $cfg, array $rows, string $context): ?array {
         return null;
     }
 
-    $system = "You are an expert Arma Reforger server log analyst." .
-        " Write a well-structured Markdown report with a title, summary, and a findings section." .
-        " Do not return JSON. Do not wrap the response in markdown code fences." .
-        " Return only the raw Markdown text.";
+    $system = <<<'SYS'
+You are an expert Arma Reforger server and client log analyst. Your job is to read Enfusion console/crash/script logs and produce a concise, actionable Markdown report for a server admin who needs to decide what to fix.
+
+Be ruthless about signal vs noise:
+- A million logged exceptions is not a crash. Focus on per-frame null-pointer loops, spawn failures, and hard native crashes.
+- One Virtual Machine Exception in OnUpdate/EOnFixedFrame is worse than 10,000 one-off content warnings because it fires 60 times per second.
+- A .mdmp file with no VM exceptions in the same session is a native engine crash; note that and look at the previous session for the script-side trigger.
+
+Common root-cause patterns you MUST recognize:
+- SCR_CharacterCameraHandlerComponent::JWK_ShouldForceFirstPerson with m_iThirdPersonCameraMode NULL -> JWK Framework first-person camera hook; causes severe stutter. Usually triggered by a broken inventory/arsenal catalog.
+- SCR_InventoryMenuUI::UpdateItemInfoPosition per-frame null -> inventory UI stutter. Root cause is usually a weapon/attachment mod with missing UIInfo.
+- SCR_InventoryMenuUI::HighlightAvailableStorages / JWK_InfiniteInventoryComponent::OnItemRemoved_S / JWK_ShopInterfaceUIComponent::SetupCard null -> broken catalog entries from outdated weapon or JWK-dependent mods.
+- Unknown class 'ADSS_*' -> missing or outdated ADSSway - Core dependency, or Better Weapon Immersion 2.8 (BetterRecoil) injecting classes into vanilla weapon base prefabs.
+- component X cannot be combined with component Y followed by CreateEntityServer NULL -> vehicle/character prefab cannot spawn because two components conflict. Often caused by Car Radio4All injecting RadioBroadcastSoundComponent.
+- JWK_AmbientTrafficSystem spawn failures or AttachVehicle failed, missing VehicleRoadUserComponent on: NULL -> ambient traffic prefab missing components, cascades into JWK_BodiesGarbageCollectorGrid division-by-zero.
+- RVX_WeaponInfoManager::Init with mfdEntity NULL, SCR_MapWeatherUI::OnMapOpen/Close -> OH-58D Kiowa / MFD Framework version mismatch.
+- 0xc0000374 heap corruption in a session with no VM exceptions -> secondary crash; primary offender is usually in the previous session.
+- ENGINE (F): Crashed with a clear mod/prefab line just before it -> that mod is the immediate trigger.
+
+Output rules:
+- Use only Markdown. No JSON. No markdown code fences around the whole report.
+- Start with one sharp TL;DR sentence that says whether the session is healthy, has stutter, has a crash, or has a spawn failure.
+- Then a short ## Summary (2-4 sentences). Bold the key mod names and class/function names.
+- Then ## Findings with ### Severity: Title sub-headings. Severity must be one of: Critical, Warning, Info.
+- For each finding, include: (1) the likely offending mod or class, (2) the evidence pattern, (3) the recommended fix.
+- Maximum 6 findings. Merge similar repeated exceptions into one finding.
+- Do not paste long log excerpts. Cite a single representative line if needed.
+- If the session is basically healthy, write only the TL;DR and Summary and omit Findings.
+SYS;
 
     $userPrompt = "Analyze the following Arma Reforger log(s) from friend '$friend' (session '$session').\n\n" .
-        "Return a Markdown report exactly in this format:\n\n" .
-        "# Title\\n\\n" .
-        "## Summary\\n\\n" .
-        "2-4 sentence overview. Use **bold** for important terms. Use line breaks for readability.\\n\\n" .
-        "## Findings\\n\\n" .
-        "### :red_circle: Critical: Short title\\n" .
-        "Concise explanation. **Bold** key evidence.\\n\\n" .
-        "### :warning: Warning: Short title\\n" .
-        "Concise explanation.\\n\\n" .
-        "### :blue_circle: Info: Short title\\n" .
-        "Concise explanation.\\n\\n" .
-        "Rules:\n" .
-        "- Use '## Summary' and '## Findings' headers exactly.\n" .
-        "- Each finding starts with '### :red_circle: Critical:', '### :warning: Warning:', or '### :blue_circle: Info:' followed by a short title.\n" .
-        "- Only use 'Critical' for crashes, fatal exceptions, or game-breaking bugs.\n" .
-        "- Use 'Warning' for notable errors, missing assets, stutters, or performance issues.\n" .
-        "- Use 'Info' for minor noise, normal startup/shutdown, or cosmetic issues.\n" .
-        "- Keep titles under 80 characters.\n" .
-        "- Keep each finding details to 1-3 sentences.\n" .
-        "- If nothing important happened, write a short summary and omit the Findings section.\n\n" .
-        "Focus on: game crashes, exceptions, low FPS/stutter events, network timeouts, RCON/admin actions.\n\n" .
+        "Return a Markdown report with:\n" .
+        "1. A one-sentence TL;DR at the top.\n" .
+        "2. A ## Summary section (2-4 sentences).\n" .
+        "3. A ## Findings section with severity-ranked subsections only if there is something actionable. Use ### Critical: ..., ### Warning: ..., ### Info: ....\n\n" .
+        "Prioritize in this order:\n" .
+        "1. Hard native crashes (.mdmp files, ENGINE (F): Crashed, heap corruption).\n" .
+        "2. Per-frame null-pointer exceptions in OnUpdate / EOnFixedFrame that cause stutter.\n" .
+        "3. Spawn failures from component conflicts or missing classes.\n" .
+        "4. Missing mod dependencies (Unknown class, Wrong GUID/name for resource).\n" .
+        "5. FPS / memory degradation.\n" .
+        "6. Cosmetic content warnings.\n\n" .
+        "For each Critical or Warning finding, state:\n" .
+        "- What likely broke (mod/class).\n" .
+        "- Why the log points to it.\n" .
+        "- The concrete next step to fix it.\n\n" .
         "LOG CONTENT:\n" . $context . "\n\nReturn only raw Markdown.";
 
     $payload = [
