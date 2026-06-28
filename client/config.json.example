@@ -1,0 +1,7 @@
+{
+  "server_url": "https://your-host/upload.php",
+  "token": "paste-friend-token-here",
+  "log_root": "C:/Users/yourname/Documents/My Games/ArmaReforger/logs",
+  "scan_interval_seconds": 30,
+  "uploaded_sessions": []
+}
