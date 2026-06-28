@@ -34,13 +34,14 @@ return [
         'samesite'        => 'Lax',
     ],
     'ai' => [
-        'enabled'     => false,
-        'provider'    => 'anthropic',
-        'base_url'    => '',   // e.g. https://openlimits.app/v1/messages or https://api.openai.com/v1/chat/completions
-        'api_key'     => '',
-        'model'       => 'claude-3-5-sonnet-20241022',
-        'max_tokens'  => 4096,
-        'max_chars'   => 200_000,
+        'enabled'    => false,
+        'provider'   => 'anthropic',   // anthropic or ollama
+        'base_url'   => '',            // anthropic: https://openlimits.app ; ollama: http://host:11434 (no /api)
+        'api_key'    => '',
+        'model'      => 'claude-3-5-sonnet-20241022',
+        'max_tokens' => 128000,
+        'max_chars'  => 800000,
+        'num_ctx'    => 8192,          // ollama only: context window size
     ],
     'setup' => [
         'enabled' => true,

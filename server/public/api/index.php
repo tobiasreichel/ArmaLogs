@@ -374,7 +374,7 @@ function handle_analyze(): void {
         json_error('No readable log content');
     }
 
-    $report = call_claude($cfg, $rows, $context);
+    $report = call_ai($cfg, $rows, $context);
     if ($report === null) {
         json_error('AI analysis failed');
     }
@@ -402,7 +402,15 @@ function handle_analyze(): void {
     ]);
 }
 
-function call_claude(array $cfg, array $rows, string $context): ?array {
+function call_ai(array $cfg, array $rows, string $context): ?array {
+$provider = $cfg['provider'] ?? 'anthropic';
+    if ($provider === 'ollama') {
+        return call_ollama($cfg, $rows, $context);
+    }
+    return call_anthropic($cfg, $rows, $context);
+}
+
+function call_anthropic(array $cfg, array $rows, string $context): ?array {
     $apiKey = $cfg['api_key'];
     $model = $cfg['model'];
     $maxTokens = (int)($cfg['max_tokens'] ?? 4096);
@@ -477,6 +485,98 @@ function call_claude(array $cfg, array $rows, string $context): ?array {
     }
 
     $markdown = trim($data['content'][0]['text']);
+    if (preg_match('/^```markdown\s*(.*?)\s*```$/s', $markdown, $m)) {
+        $markdown = trim($m[1]);
+    } elseif (preg_match('/^```\s*(.*?)\s*```$/s', $markdown, $m)) {
+        $markdown = trim($m[1]);
+    }
+
+    $report = parse_markdown_report($markdown);
+    return [
+        'title'    => $report['title'] ?: 'AI report',
+        'summary'  => $report['summary'] ?: $markdown,
+        'findings' => $report['findings'],
+        'markdown' => $markdown,
+    ];
+}
+
+
+function call_ollama(array $cfg, array $rows, string $context): ?array {
+    $baseUrl = rtrim($cfg['base_url'] ?? '', '/');
+    $model = $cfg['model'];
+    $friend = $rows[0]['friend_name'] ?? 'unknown';
+    $session = $rows[0]['session_id'] ?? 'unknown';
+
+    if ($baseUrl === '') {
+        error_log('Ollama base_url is empty');
+        return null;
+    }
+
+    $system = "You are an expert Arma Reforger server log analyst." .
+        " Write a well-structured Markdown report with a title, summary, and a findings section." .
+        " Do not return JSON. Do not wrap the response in markdown code fences." .
+        " Return only the raw Markdown text.";
+
+    $userPrompt = "Analyze the following Arma Reforger log(s) from friend '$friend' (session '$session').\n\n" .
+        "Return a Markdown report exactly in this format:\n\n" .
+        "# Title\\n\\n" .
+        "## Summary\\n\\n" .
+        "2-4 sentence overview. Use **bold** for important terms. Use line breaks for readability.\\n\\n" .
+        "## Findings\\n\\n" .
+        "### :red_circle: Critical: Short title\\n" .
+        "Concise explanation. **Bold** key evidence.\\n\\n" .
+        "### :warning: Warning: Short title\\n" .
+        "Concise explanation.\\n\\n" .
+        "### :blue_circle: Info: Short title\\n" .
+        "Concise explanation.\\n\\n" .
+        "Rules:\n" .
+        "- Use '## Summary' and '## Findings' headers exactly.\n" .
+        "- Each finding starts with '### :red_circle: Critical:', '### :warning: Warning:', or '### :blue_circle: Info:' followed by a short title.\n" .
+        "- Only use 'Critical' for crashes, fatal exceptions, or game-breaking bugs.\n" .
+        "- Use 'Warning' for notable errors, missing assets, stutters, or performance issues.\n" .
+        "- Use 'Info' for minor noise, normal startup/shutdown, or cosmetic issues.\n" .
+        "- Keep titles under 80 characters.\n" .
+        "- Keep each finding details to 1-3 sentences.\n" .
+        "- If nothing important happened, write a short summary and omit the Findings section.\n\n" .
+        "Focus on: game crashes, exceptions, low FPS/stutter events, network timeouts, RCON/admin actions.\n\n" .
+        "LOG CONTENT:\n" . $context . "\n\nReturn only raw Markdown.";
+
+    $payload = [
+        'model'   => $model,
+        'prompt'  => $system . "\n\n" . $userPrompt,
+        'stream'  => false,
+        'options' => [
+            'num_ctx' => (int)($cfg['num_ctx'] ?? 8192),
+        ],
+    ];
+
+    $url = $baseUrl . '/api/generate';
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER     => [
+            'Content-Type: application/json',
+        ],
+        CURLOPT_POSTFIELDS     => json_encode($payload),
+        CURLOPT_CONNECTTIMEOUT => 30,
+        CURLOPT_TIMEOUT        => 300,
+    ]);
+    $resp = curl_exec($ch);
+    $err = curl_error($ch);
+    curl_close($ch);
+    if ($resp === false || $err !== '') {
+        error_log('Ollama API error: ' . $err);
+        return null;
+    }
+
+    $data = json_decode($resp, true);
+    if (empty($data['response'])) {
+        error_log('Ollama API unexpected response: ' . $resp);
+        return null;
+    }
+
+    $markdown = trim($data['response']);
     if (preg_match('/^```markdown\s*(.*?)\s*```$/s', $markdown, $m)) {
         $markdown = trim($m[1]);
     } elseif (preg_match('/^```\s*(.*?)\s*```$/s', $markdown, $m)) {
