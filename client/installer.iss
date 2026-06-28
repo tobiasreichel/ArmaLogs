@@ -3,7 +3,7 @@
 ;   "C:\Program Files (x86)\Inno Setup 6\iscc.exe" client\installer.iss
 
 #define MyAppName "ArmaLogs Client"
-#define MyAppVersion "1.1.4"
+#define MyAppVersion "1.1.5"
 #define MyAppPublisher "ArmaLogs"
 #define MyAppURL "https://armalogs.reichel.network"
 #define MyAppExeName "ArmaLogsClient.exe"
@@ -46,6 +46,10 @@ Name: "{autostartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: au
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent; Tasks: launch
+
+[UninstallDelete]
+Type: filesandordirs; Name: "{localappdata}\ArmaLogsClient"
+Type: filesandordirs; Name: "{%USERPROFILE}\.armalogs"
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "ArmaLogsClient"; ValueData: """{app}\{#MyAppExeName}"""; Tasks: autostart; Flags: uninsdeletevalue
