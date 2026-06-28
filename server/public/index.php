@@ -439,7 +439,7 @@ $admin = current_admin();
         const scope = r.is_multi_friend ? 'multi-friend' : (r.is_multi_session ? 'multi-session' : `${escapeHtml(r.friend_name||'unknown')} / ${escapeHtml(r.session_id||'unknown')}`);
         div.innerHTML=`<div class="tree-header" onclick="toggleTree(this)">
           <div class="title">${escapeHtml(r.title||'Untitled report')}</div>
-          <div class="meta">${scope} · ${new Date(r.created_at).toLocaleString()} · <button class="btn" style="padding:2px 8px;font-size:.75rem" onclick="downloadReportMarkdown(event,${r.id})">Download .md</button> · <button class="btn" style="padding:2px 8px;font-size:.75rem" onclick="deleteReport(event,${r.id})">Delete</button></div>
+          <div class="meta">${scope} · ${new Date(r.created_at).toLocaleString()} · <button class="btn" style="padding:2px 8px;font-size:.75rem" onclick="downloadReportMarkdown(event,${r.id})">Download .md</button> · <button class="btn" style="padding:2px 8px;font-size:.75rem" onclick="downloadReportPdf(event,${r.id})">Download PDF</button> · <button class="btn" style="padding:2px 8px;font-size:.75rem" onclick="deleteReport(event,${r.id})">Delete</button></div>
         </div>
         <div class="tree-body" style="padding:16px">
           <div class="markdown" style="line-height:1.55">${mdToHtml(r.markdown || r.summary || '')}</div>
@@ -457,6 +457,19 @@ $admin = current_admin();
         showToast('Report deleted');
         loadReports();
       }catch(err){showToast(err.message,true);}
+    }
+
+    function downloadReportPdf(e,id){
+      e.stopPropagation();
+      const r = JSON.parse((e.target.closest('[data-report]')?.dataset.report) || '{}');
+      const title = (r.title||'report').replace(/\s+/g,'_').toLowerCase();
+      const url = '/api/?path=reports&pdf=' + encodeURIComponent(id);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'report_' + id + '_' + title + '.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
     }
     (async()=>{
       for(const fn of [loadStats,loadFriends,loadRequests,loadLogs,loadReports]){

@@ -812,6 +812,11 @@ function parse_markdown_report(string $markdown): array {
 function handle_reports(string $method): void {
     $pdo = db();
     if ($method === 'GET') {
+        $pdfId = isset($_GET['pdf']) ? (int)$_GET['pdf'] : 0;
+        if ($pdfId > 0) {
+            serve_report_pdf($pdfId);
+            return;
+        }
         $stmt = $pdo->query(
             'SELECT r.id, r.title, r.summary, r.findings, r.markdown, r.model, r.created_at, f.name AS friend_name, s.session_id, r.is_multi_friend, r.is_multi_session
              FROM reports r
@@ -835,4 +840,31 @@ function handle_reports(string $method): void {
         return;
     }
     json_error('Method not allowed', 405);
+}
+
+function serve_report_pdf(int $reportId): void {
+    require_once INCLUDES_DIR . '/pdf_report.php';
+
+    $pdo = db();
+    $stmt = $pdo->prepare(
+        'SELECT r.id, r.title, r.markdown, r.model, r.created_at, f.name AS friend_name, s.session_id, r.is_multi_friend, r.is_multi_session
+         FROM reports r
+         LEFT JOIN friends f ON f.id = r.friend_id
+         LEFT JOIN sessions s ON s.id = r.session_id
+         WHERE r.id = :id'
+    );
+    $stmt->execute([':id' => $reportId]);
+    $report = $stmt->fetch();
+    if (!$report) {
+        json_error('Report not found', 404);
+    }
+
+    $pdfData = markdown_to_pdf($report);
+    $filename = 'report_' . $reportId . '_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $report['title'] ?? 'report') . '.pdf';
+
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Content-Length: ' . strlen($pdfData));
+    echo $pdfData;
+    exit;
 }
