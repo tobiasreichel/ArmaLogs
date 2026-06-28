@@ -27,10 +27,136 @@ if ($path === 'friends') {
     handle_analyze();
 } elseif ($path === 'reports') {
     handle_reports($method);
+} elseif ($path === 'log-content') {
+    handle_log_content();
+} elseif ($path === 'session-timeline') {
+    handle_session_timeline();
 } elseif ($path === 'stats') {
     handle_stats();
 } else {
     json_error('Unknown endpoint', 404);
+}
+
+function handle_log_content(): void {
+    $pdo = db();
+    $id = (int)($_GET['id'] ?? 0);
+    if ($id <= 0) {
+        json_error('Log ID required');
+    }
+    $stmt = $pdo->prepare(
+        'SELECT l.id, l.filename, l.file_size, l.content_sha256, l.client_timestamp, l.uploaded_at, l.storage_path, f.name AS friend_name, s.session_id
+         FROM logs l
+         JOIN friends f ON f.id = l.friend_id
+         LEFT JOIN sessions s ON s.id = l.session_id
+         WHERE l.id = :id'
+    );
+    $stmt->execute([':id' => $id]);
+    $row = $stmt->fetch();
+    if (!$row) {
+        json_error('Log not found', 404);
+    }
+    $base = rtrim(config()['paths']['storage'] ?? '/app/data/storage/logs', '/');
+    $path = $base . '/' . ltrim($row['storage_path'], '/');
+    if (!file_exists($path)) {
+        json_error('Log file missing on disk', 404);
+    }
+    $text = file_get_contents($path);
+    if ($text === false) {
+        json_error('Unable to read log file');
+    }
+    json_response([
+        'ok'      => true,
+        'log'     => $row,
+        'content' => $text,
+    ]);
+}
+
+function handle_session_timeline(): void {
+    $pdo = db();
+    $id = (int)($_GET['id'] ?? 0);
+    if ($id <= 0) {
+        json_error('Log ID required');
+    }
+    $stmt = $pdo->prepare(
+        'SELECT l.id, l.filename, l.storage_path, l.file_size, f.name AS friend_name, s.session_id
+         FROM logs l
+         JOIN friends f ON f.id = l.friend_id
+         LEFT JOIN sessions s ON s.id = l.session_id
+         WHERE l.id = :id'
+    );
+    $stmt->execute([':id' => $id]);
+    $row = $stmt->fetch();
+    if (!$row) {
+        json_error('Log not found', 404);
+    }
+    $base = rtrim(config()['paths']['storage'] ?? '/app/data/storage/logs', '/');
+    $path = $base . '/' . ltrim($row['storage_path'], '/');
+    if (!file_exists($path)) {
+        json_response(['ok' => true, 'log' => $row, 'events' => []]);
+    }
+    $text = file_get_contents($path);
+    if ($text === false || $text === '') {
+        json_response(['ok' => true, 'log' => $row, 'events' => []]);
+    }
+
+    $events = parse_log_timeline($text);
+    json_response([
+        'ok'     => true,
+        'log'    => $row,
+        'events' => $events,
+    ]);
+}
+
+function parse_log_timeline(string $text): array {
+    $events = [];
+    $lines = explode("\n", $text);
+    $seenSessionStart = false;
+    foreach ($lines as $line) {
+        $trim = trim($line);
+        if ($trim === '') {
+            continue;
+        }
+        // Pull HH:MM:SS timestamp from the typical Arma log prefix
+        $ts = null;
+        if (preg_match('/^([0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]+)\s/', $trim, $m)) {
+            $ts = $m[1];
+        }
+        $lower = strtolower($trim);
+        $ev = null;
+        $level = 'info';
+        if (!$seenSessionStart && preg_match('/START|ENGINE START|Back	have|Game engine init/i', $trim)) {
+            $seenSessionStart = true;
+            $ev = ['type' => 'start', 'label' => 'Session / engine start'];
+        } elseif (preg_match('/scenario_exit|application quit|exiting/i', $lower)) {
+            $ev = ['type' => 'end', 'label' => 'Scenario exit / application quit'];
+        } elseif (preg_match('/connecting to server|joined server/i', $lower)) {
+            $ev = ['type' => 'connect', 'label' => 'Connecting to server'];
+        } elseif (preg_match('/mission loaded|loaded mission headers from \d+ addon/i', $lower)) {
+            $ev = ['type' => 'mission', 'label' => 'Mission / addon load'];
+        } elseif (preg_match('/\.mdmp|ENGINE \(F\): Crashed|crash/i', $lower)) {
+            $ev = ['type' => 'crash', 'label' => 'Crash / native error'];
+            $level = 'critical';
+        } elseif (preg_match('/JWK_ShouldForceFirstPerson|m_iThirdPersonCameraMode/i', $trim)) {
+            $ev = ['type' => 'mod_issue', 'label' => 'JWK first-person camera hook'];
+            $level = 'warning';
+        } elseif (preg_match('/WCS_.*Unknown class|WCS_.*obsolete|WCS_Core_/i', $trim)) {
+            $ev = ['type' => 'mod_issue', 'label' => 'WCS mod mismatch'];
+            $level = 'warning';
+        } elseif (preg_match('/Wrong GUID\/name for resource|Unknown class.*SCR_|Missing material/i', $trim)) {
+            $ev = ['type' => 'mod_issue', 'label' => 'Missing / broken resource'];
+            $level = 'warning';
+        } elseif (preg_match('/Can\'t instantiate class|Wrong GUID.*configs\/factions/i', $trim)) {
+            $ev = ['type' => 'mod_issue', 'label' => 'Faction / prefab failure'];
+            $level = 'warning';
+        }
+        if ($ev !== null) {
+            $ev['timestamp'] = $ts;
+            $ev['level'] = $level;
+            $ev['line'] = substr($trim, 0, 240);
+            $events[] = $ev;
+        }
+    }
+    return $events;
 }
 
 function handle_friends(string $method): void {
@@ -404,11 +530,12 @@ function handle_analyze(): void {
             ? ('multi_session_' . $first['friend_name'] . '_' . $first['session_id'])
             : ($first['friend_name'] . '_' . $first['session_id']));
     $ins = $pdo->prepare(
-        'INSERT INTO reports (friend_id, session_id, log_ids, title, summary, findings, model, markdown, is_multi_friend, is_multi_session) VALUES (:fid, :sid, :lids, :title, :summary, :findings, :model, :markdown, :multi_friend, :multi_session)'
+        'INSERT INTO reports (friend_id, session_id, share_token, log_ids, title, summary, findings, model, markdown, is_multi_friend, is_multi_session) VALUES (:fid, :sid, :tok, :lids, :title, :summary, :findings, :model, :markdown, :multi_friend, :multi_session)'
     );
     $ins->execute([
         ':fid'          => $multiFriend ? null : ($first['friend_id'] ?? null),
         ':sid'          => $multiSession ? null : ($first['session_db_id'] ?? null),
+        ':tok'          => bin2hex(random_bytes(16)),
         ':lids'         => json_encode($ids),
         ':title'        => $title,
         ':summary'      => $report['summary'],
@@ -418,10 +545,12 @@ function handle_analyze(): void {
         ':multi_friend'  => $multiFriend ? 1 : 0,
         ':multi_session'=> $multiSession ? 1 : 0,
     ]);
+    $reportId = (int)$pdo->lastInsertId();
 
     json_response([
         'ok'       => true,
         'report'   => $report,
+        'report_id' => $reportId,
         'read'     => $read,
         'truncated' => strlen($context) >= $maxChars,
     ]);
@@ -823,7 +952,7 @@ function handle_reports(string $method): void {
             return;
         }
         $stmt = $pdo->query(
-            'SELECT r.id, r.title, r.summary, r.findings, r.markdown, r.model, r.created_at, f.name AS friend_name, s.session_id, r.is_multi_friend, r.is_multi_session
+            'SELECT r.id, r.title, r.summary, r.findings, r.markdown, r.model, r.created_at, r.share_token, f.name AS friend_name, s.session_id, r.is_multi_friend, r.is_multi_session
              FROM reports r
              LEFT JOIN friends f ON f.id = r.friend_id
              LEFT JOIN sessions s ON s.id = r.session_id
@@ -831,6 +960,28 @@ function handle_reports(string $method): void {
              LIMIT 1000'
         );
         json_response(['ok' => true, 'reports' => $stmt->fetchAll()]);
+        return;
+    }
+    if ($method === 'POST') {
+        $input = json_decode(file_get_contents('php://input'), true) ?: [];
+        $id = (int)($input['id'] ?? 0);
+        if ($id <= 0) {
+            json_error('ID required');
+        }
+        $stmt = $pdo->prepare('SELECT share_token FROM reports WHERE id = :id');
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch();
+        if (!$row) {
+            json_error('Report not found', 404);
+        }
+        if (empty($row['share_token'])) {
+            $token = bin2hex(random_bytes(16));
+            $upd = $pdo->prepare('UPDATE reports SET share_token = :tok WHERE id = :id');
+            $upd->execute([':tok' => $token, ':id' => $id]);
+        } else {
+            $token = $row['share_token'];
+        }
+        json_response(['ok' => true, 'share_url' => 'https://' . ($_SERVER['HTTP_HOST'] ?? 'armalogs.reichel.network') . '/share.php?token=' . $token]);
         return;
     }
     if ($method === 'DELETE') {
@@ -846,6 +997,7 @@ function handle_reports(string $method): void {
     }
     json_error('Method not allowed', 405);
 }
+
 
 function serve_report_pdf(int $reportId): void {
     require_once INCLUDES_DIR . '/pdf_report.php';

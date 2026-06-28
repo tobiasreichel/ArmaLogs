@@ -298,7 +298,7 @@ $admin = current_admin();
                     <tr>
                       <td><input type="checkbox" class="log-check" data-id="${l.id}"></td>
                       <td>${new Date(l.uploaded_at).toLocaleString()}</td>
-                      <td>${escapeHtml(l.filename)}</td>
+                      <td><a href="javascript:void(0)" onclick="viewLog(event,${l.id})" style="color:#60a5fa">${escapeHtml(l.filename)}</a> · <a href="javascript:void(0)" onclick="viewTimeline(event,${l.id})" style="color:#94a3b8">timeline</a></td>
                       <td>${fmtBytes(l.file_size)}</td>
                     </tr>`).join('')}</tbody>
                 </table>
@@ -439,7 +439,7 @@ $admin = current_admin();
         const scope = r.is_multi_friend ? 'multi-friend' : (r.is_multi_session ? 'multi-session' : `${escapeHtml(r.friend_name||'unknown')} / ${escapeHtml(r.session_id||'unknown')}`);
         div.innerHTML=`<div class="tree-header" onclick="toggleTree(this)">
           <div class="title">${escapeHtml(r.title||'Untitled report')}</div>
-          <div class="meta">${scope} · ${new Date(r.created_at).toLocaleString()} · <button class="btn" style="padding:2px 8px;font-size:.75rem" onclick="downloadReportMarkdown(event,${r.id})">Download .md</button> · <button class="btn" style="padding:2px 8px;font-size:.75rem" onclick="downloadReportPdf(event,${r.id})">Download PDF</button> · <button class="btn" style="padding:2px 8px;font-size:.75rem" onclick="deleteReport(event,${r.id})">Delete</button></div>
+          <div class="meta">${scope} · ${new Date(r.created_at).toLocaleString()} · <button class="btn" style="padding:2px 8px;font-size:.75rem" onclick="shareReport(event,${r.id})">Share</button> · <button class="btn" style="padding:2px 8px;font-size:.75rem" onclick="downloadReportMarkdown(event,${r.id})">Download .md</button> · <button class="btn" style="padding:2px 8px;font-size:.75rem" onclick="downloadReportPdf(event,${r.id})">Download PDF</button> · <button class="btn" style="padding:2px 8px;font-size:.75rem" onclick="deleteReport(event,${r.id})">Delete</button></div>
         </div>
         <div class="tree-body" style="padding:16px">
           <div class="markdown" style="line-height:1.55">${mdToHtml(r.markdown || r.summary || '')}</div>
@@ -470,6 +470,50 @@ $admin = current_admin();
       document.body.appendChild(a);
       a.click();
       a.remove();
+    }
+
+    async function shareReport(e,id){
+      e.stopPropagation();
+      try{
+        const res = await api('reports',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
+        await navigator.clipboard.writeText(res.share_url);
+        showToast('Share link copied to clipboard');
+      }catch(err){showToast(err.message,true);}
+    }
+
+    async function viewLog(e,id){
+      if(e) e.stopPropagation();
+      try{
+        const res=await api('log-content?id='+id);
+        showModal(res.log.filename, escapeHtml(res.content), true);
+      }catch(err){showToast(err.message,true);}
+    }
+
+    async function viewTimeline(e,id){
+      if(e) e.stopPropagation();
+      try{
+        const res=await api('session-timeline?id='+id);
+        const lines = res.events.map(ev=>{
+          const ts = ev.timestamp ? `<span style="color:#94a3b8">${escapeHtml(ev.timestamp)}</span> ` : '';
+          const badge = {critical:'🔴',warning:'🟡',info:'🔵'}[ev.level] || '⚪';
+          return `<div style="margin:6px 0;padding:6px;border-left:3px solid ${ev.level==='critical'?'#ef4444':ev.level==='warning'?'#eab308':'#3b82f6'};padding-left:10px">${badge} <strong>${escapeHtml(ev.label)}</strong> ${ts}<div style="font-size:.8rem;color:#94a3b8;margin-top:2px">${escapeHtml(ev.line)}</div></div>`;
+        }).join('') || '<p>No timeline events detected.</p>';
+        showModal(res.log.filename + ' — timeline', lines, false);
+      }catch(err){showToast(err.message,true);}
+    }
+
+    function showModal(title, body, monospace){
+      const existing=document.getElementById('modalOverlay');
+      if(existing) existing.remove();
+      const overlay=document.createElement('div');
+      overlay.id='modalOverlay';
+      overlay.style='position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;';
+      overlay.innerHTML=`<div style="background:#1e293b;border:1px solid var(--border);border-radius:12px;max-width:900px;max-height:90vh;width:100%;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.5)">
+        <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0;font-size:1rem">${escapeHtml(title)}</h3><button onclick="document.getElementById('modalOverlay').remove()" class="btn">Close</button></div>
+        <div style="padding:20px;overflow:auto;font-size:.85rem;line-height:1.5;${monospace?'font-family:monospace;white-space:pre;':''}">${body}</div>
+      </div>`;
+      overlay.onclick=(ev)=>{if(ev.target===overlay) overlay.remove();};
+      document.body.appendChild(overlay);
     }
     (async()=>{
       for(const fn of [loadStats,loadFriends,loadRequests,loadLogs,loadReports]){
