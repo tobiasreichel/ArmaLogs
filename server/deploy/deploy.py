@@ -17,6 +17,7 @@ Optional:
     ARMALOGS_INCLUDES_DIR local includes dir (default: server/includes)
 """
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -83,6 +84,22 @@ def main() -> int:
     if not all([HOST, USER, PASS]):
         print("Set ARMALOGS_SFTP_HOST, ARMALOGS_SFTP_PORT, ARMALOGS_SFTP_USER, ARMALOGS_SFTP_PASS in .env or environment")
         return 1
+
+    print("Linting PHP files before deploy...")
+    php_files = sorted(set(LOCAL_PUBLIC.rglob("*.php")) | set(LOCAL_INCLUDES.rglob("*.php")))
+    for path in php_files:
+        result = subprocess.run(
+            ["php", "-l", str(path)],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        if result.returncode != 0:
+            print(f"PHP lint failed for {path}:")
+            print(result.stdout)
+            print(result.stderr)
+            return 1
+    print(f"Linted {len(php_files)} PHP files.")
 
     transport = paramiko.Transport((HOST, PORT))
     transport.connect(username=USER, password=PASS)
