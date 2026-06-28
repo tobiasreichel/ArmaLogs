@@ -72,6 +72,19 @@ $admin = current_admin();
 
     <section style="margin-top:32px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h2 style="margin:0">Friend requests</h2>
+        <button class="btn" onclick="loadRequests()">Refresh</button>
+      </div>
+      <table id="requests-table">
+        <thead>
+          <tr><th>Name</th><th>Hostname</th><th>Requested</th><th>Actions</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section style="margin-top:32px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <h2 style="margin:0">Recent logs</h2>
       </div>
       <table id="logs-table">
@@ -191,7 +204,40 @@ $admin = current_admin();
         await loadFriends();loadStats();showToast('Friend deleted');
       }catch(e){showToast(e.message,true);}
     }
-    (async()=>{await loadStats();await loadFriends();await loadLogs();})();
+    async function loadRequests(){
+      const data=await api('friend-requests');
+      const tbody=document.querySelector('#requests-table tbody');
+      tbody.innerHTML='';
+      if(data.requests.length===0){
+        tbody.innerHTML='<tr><td colspan="4" class="muted">No pending requests</td></tr>';
+        return;
+      }
+      for(const r of data.requests){
+        const tr=document.createElement('tr');
+        tr.innerHTML=`
+          <td>${escapeHtml(r.name)}</td>
+          <td>${escapeHtml(r.hostname||'—')}</td>
+          <td>${new Date(r.created_at).toLocaleString()}</td>
+          <td>
+            <button class="btn" style="padding:4px 8px;font-size:.75rem" onclick="approveRequest(${r.id})">Approve</button>
+            <button class="btn danger" style="padding:4px 8px;font-size:.75rem" onclick="rejectRequest(${r.id})">Reject</button>
+          </td>`;
+        tbody.appendChild(tr);
+      }
+    }
+    async function approveRequest(id){
+      try{
+        const data=await api('friend-requests-approve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
+        await loadRequests();await loadFriends();loadStats();showToast('Request approved');
+      }catch(e){showToast(e.message,true);}
+    }
+    async function rejectRequest(id){
+      try{
+        await api('friend-requests-reject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
+        await loadRequests();showToast('Request rejected');
+      }catch(e){showToast(e.message,true);}
+    }
+    (async()=>{await loadStats();await loadFriends();await loadRequests();await loadLogs();})();
   </script>
 </body>
 </html>

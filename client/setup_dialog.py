@@ -18,14 +18,14 @@ def run_setup_dialog() -> bool:
 
     root = tk.Tk()
     root.title("ArmaLogs Client Setup")
-    root.geometry("520x320")
+    root.geometry("560x420")
     root.resizable(False, False)
     root.configure(bg="#151821")
 
     # Center window
     root.update_idletasks()
-    x = (root.winfo_screenwidth() // 2) - (520 // 2)
-    y = (root.winfo_screenheight() // 2) - (320 // 2)
+    x = (root.winfo_screenwidth() // 2) - (560 // 2)
+    y = (root.winfo_screenheight() // 2) - (420 // 2)
     root.geometry(f"+{x}+{y}")
 
     style = ttk.Style(root)
@@ -41,43 +41,79 @@ def run_setup_dialog() -> bool:
 
     ttk.Label(frame, text="Server URL").grid(row=0, column=0, sticky=tk.W, pady=(0, 4))
     url_var = tk.StringVar(value=cfg.get("server_url", ""))
-    url_entry = ttk.Entry(frame, textvariable=url_var, width=55)
+    url_entry = ttk.Entry(frame, textvariable=url_var, width=60)
     url_entry.grid(row=1, column=0, columnspan=2, sticky=tk.EW, pady=(0, 12))
 
-    ttk.Label(frame, text="Friend Token").grid(row=2, column=0, sticky=tk.W, pady=(0, 4))
-    token_var = tk.StringVar(value=cfg.get("token", ""))
-    token_entry = ttk.Entry(frame, textvariable=token_var, width=55, show="•")
-    token_entry.grid(row=3, column=0, columnspan=2, sticky=tk.EW, pady=(0, 12))
+    ttk.Label(frame, text="Your Name").grid(row=2, column=0, sticky=tk.W, pady=(0, 4))
+    name_var = tk.StringVar(value=cfg.get("name", ""))
+    name_entry = ttk.Entry(frame, textvariable=name_var, width=40)
+    name_entry.grid(row=3, column=0, sticky=tk.W, pady=(0, 12))
 
     ttk.Label(frame, text="Arma Reforger Logs Folder").grid(row=4, column=0, sticky=tk.W, pady=(0, 4))
     log_var = tk.StringVar(value=cfg.get("log_root", str(DEFAULT_LOG_ROOT)))
-    log_entry = ttk.Entry(frame, textvariable=log_var, width=55)
+    log_entry = ttk.Entry(frame, textvariable=log_var, width=60)
     log_entry.grid(row=5, column=0, columnspan=2, sticky=tk.EW, pady=(0, 12))
 
     ttk.Label(frame, text="Scan Interval (seconds)").grid(row=6, column=0, sticky=tk.W, pady=(0, 4))
     interval_var = tk.StringVar(value=str(cfg.get("scan_interval_seconds", 30)))
     interval_entry = ttk.Entry(frame, textvariable=interval_var, width=10)
-    interval_entry.grid(row=7, column=0, sticky=tk.W, pady=(0, 18))
+    interval_entry.grid(row=7, column=0, sticky=tk.W, pady=(0, 12))
+
+    ttk.Label(frame, text="Friend Token").grid(row=8, column=0, sticky=tk.W, pady=(0, 4))
+    token_var = tk.StringVar(value=cfg.get("token", ""))
+    token_entry = ttk.Entry(frame, textvariable=token_var, width=60, show="•")
+    token_entry.grid(row=9, column=0, columnspan=2, sticky=tk.EW, pady=(0, 6))
+
+    btn_frame = ttk.Frame(frame)
+    btn_frame.grid(row=10, column=0, columnspan=2, sticky=tk.W, pady=(0, 10))
+    ttk.Button(btn_frame, text="Request token", command=lambda: request_token(url_var, name_var, token_var, error_var)).pack(side=tk.LEFT)
 
     error_var = tk.StringVar()
-    error_label = ttk.Label(frame, textvariable=error_var, foreground="#ff4f4f", wraplength=480)
-    error_label.grid(row=8, column=0, columnspan=2, sticky=tk.EW, pady=(0, 10))
+    error_label = ttk.Label(frame, textvariable=error_var, foreground="#ff4f4f", wraplength=520)
+    error_label.grid(row=11, column=0, columnspan=2, sticky=tk.EW, pady=(0, 10))
+
+    def request_token(url_var, name_var, token_var, error_var):
+        server_url = normalize_url(url_var.get().strip())
+        name = name_var.get().strip()
+        if not server_url:
+            error_var.set("Server URL is required.")
+            return
+        if not name:
+            error_var.set("Your name is required to request a token.")
+            return
+        try:
+            import requests
+            resp = requests.post(
+                server_url.replace("/upload.php", "/request-token.php"),
+                json={"name": name, "hostname": socket.gethostname()},
+                timeout=30,
+            )
+            data = resp.json()
+            if data.get("ok") and data.get("status") == "pending":
+                token_var.set(data.get("token", ""))
+                error_var.set("Request submitted. Wait for admin approval, then click Save & Start.")
+            else:
+                error_var.set(data.get("error", "Unknown response from server"))
+        except Exception as exc:
+            error_var.set(f"Token request failed: {exc}")
+
+    def normalize_url(url: str) -> str:
+        if not url.startswith(("http://", "https://")):
+            url = "https://" + url
+        if not url.endswith("/upload.php"):
+            url = url.rstrip("/") + "/upload.php"
+        return url
 
     def save():
-        server_url = url_var.get().strip()
+        server_url = normalize_url(url_var.get().strip())
         token = token_var.get().strip()
+        name = name_var.get().strip()
         log_root = log_var.get().strip()
         interval = interval_var.get().strip()
 
         if not server_url or not token or not log_root:
             error_var.set("Server URL, token, and log folder are required.")
             return
-
-        if not server_url.startswith(("http://", "https://")):
-            server_url = "https://" + server_url
-
-        if not server_url.endswith("/upload.php"):
-            server_url = server_url.rstrip("/") + "/upload.php"
 
         try:
             interval_sec = max(10, int(interval))
@@ -96,6 +132,7 @@ def run_setup_dialog() -> bool:
 
         cfg.set("server_url", server_url)
         cfg.set("token", token)
+        cfg.set("name", name)
         cfg.set("log_root", str(log_path))
         cfg.set("scan_interval_seconds", interval_sec)
 
@@ -105,10 +142,10 @@ def run_setup_dialog() -> bool:
         root.destroy()
         os._exit(0)
 
-    btn_frame = ttk.Frame(frame)
-    btn_frame.grid(row=9, column=0, columnspan=2, sticky=tk.E)
-    ttk.Button(btn_frame, text="Save & Start", command=save).pack(side=tk.RIGHT, padx=(8, 0))
-    ttk.Button(btn_frame, text="Cancel", command=cancel).pack(side=tk.RIGHT)
+    action_frame = ttk.Frame(frame)
+    action_frame.grid(row=12, column=0, columnspan=2, sticky=tk.E)
+    ttk.Button(action_frame, text="Save & Start", command=save).pack(side=tk.RIGHT, padx=(8, 0))
+    ttk.Button(action_frame, text="Cancel", command=cancel).pack(side=tk.RIGHT)
 
     frame.columnconfigure(0, weight=1)
 

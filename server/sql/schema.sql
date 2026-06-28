@@ -9,6 +9,18 @@ CREATE TABLE IF NOT EXISTS admin_users (
     UNIQUE KEY uq_admin_username (username)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS friend_requests (
+    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name          VARCHAR(64)  NOT NULL,
+    hostname      VARCHAR(255) NULL,
+    token_hash    CHAR(64)     NOT NULL,
+    status        VARCHAR(16)  NOT NULL DEFAULT 'pending',
+    created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    decided_at    DATETIME     NULL,
+    UNIQUE KEY uq_friend_requests_name (name),
+    KEY idx_friend_requests_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS friends (
     id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name            VARCHAR(64)  NOT NULL,

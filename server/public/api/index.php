@@ -15,6 +15,12 @@ require_admin();
 
 if ($path === 'friends') {
     handle_friends($method);
+} elseif ($path === 'friend-requests') {
+    handle_friend_requests($method);
+} elseif ($path === 'friend-requests-approve') {
+    handle_friend_request_approve();
+} elseif ($path === 'friend-requests-reject') {
+    handle_friend_request_reject();
 } elseif ($path === 'logs') {
     handle_logs($method);
 } elseif ($path === 'stats') {
@@ -104,6 +110,79 @@ function handle_friends(string $method): void {
         json_response(['ok' => true, 'deleted' => $stmt->rowCount()]);
     }
     json_error('Method not allowed', 405);
+}
+
+function handle_friend_requests(string $method): void {
+    if ($method !== 'GET') {
+        json_error('Method not allowed', 405);
+    }
+    $pdo = db();
+    $status = $_GET['status'] ?? 'pending';
+    if (!in_array($status, ['pending', 'approved', 'rejected', 'all'], true)) {
+        json_error('Invalid status');
+    }
+    $sql = 'SELECT id, name, hostname, status, created_at, decided_at FROM friend_requests';
+    if ($status !== 'all') {
+        $sql .= ' WHERE status = :s';
+    }
+    $sql .= ' ORDER BY created_at DESC';
+    $stmt = $pdo->prepare($sql);
+    if ($status !== 'all') {
+        $stmt->execute([':s' => $status]);
+    } else {
+        $stmt->execute();
+    }
+    json_response(['ok' => true, 'requests' => $stmt->fetchAll()]);
+}
+
+function handle_friend_request_approve(): void {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        json_error('POST required', 405);
+    }
+    $pdo = db();
+    $input = json_decode(file_get_contents('php://input'), true) ?: [];
+    $id = (int)($input['id'] ?? 0);
+    if ($id <= 0) {
+        json_error('ID required');
+    }
+
+    $stmt = $pdo->prepare('SELECT * FROM friend_requests WHERE id = :id AND status = "pending" LIMIT 1');
+    $stmt->execute([':id' => $id]);
+    $req = $stmt->fetch();
+    if (!$req) {
+        json_error('Request not found or already decided', 404);
+    }
+
+    try {
+        $pdo->beginTransaction();
+        $ins = $pdo->prepare('INSERT INTO friends (name, token_hash, note) VALUES (:n, :t, NULL)');
+        $ins->execute([':n' => $req['name'], ':t' => $req['token_hash']]);
+        $upd = $pdo->prepare('UPDATE friend_requests SET status = "approved", decided_at = NOW() WHERE id = :id');
+        $upd->execute([':id' => $id]);
+        $pdo->commit();
+        json_response(['ok' => true, 'friend_id' => (int)$pdo->lastInsertId()]);
+    } catch (PDOException $e) {
+        $pdo->rollBack();
+        if ($e->getCode() == 23000) {
+            json_error('A friend with that name already exists');
+        }
+        throw $e;
+    }
+}
+
+function handle_friend_request_reject(): void {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        json_error('POST required', 405);
+    }
+    $pdo = db();
+    $input = json_decode(file_get_contents('php://input'), true) ?: [];
+    $id = (int)($input['id'] ?? 0);
+    if ($id <= 0) {
+        json_error('ID required');
+    }
+    $stmt = $pdo->prepare('UPDATE friend_requests SET status = "rejected", decided_at = NOW() WHERE id = :id AND status = "pending"');
+    $stmt->execute([':id' => $id]);
+    json_response(['ok' => true, 'updated' => $stmt->rowCount()]);
 }
 
 function handle_logs(string $method): void {
