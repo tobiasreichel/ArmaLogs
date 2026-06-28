@@ -169,7 +169,9 @@ $admin = current_admin();
     async function loadFriends(){
       const data=await api('friends');
       const tbody=document.querySelector('#friends-table tbody');
+      if(!tbody){console.error('friends-table tbody not found');return;}
       tbody.innerHTML='';
+      if(!data.friends||data.friends.length===0){tbody.innerHTML='<tr><td colspan="6" class="muted">No friends</td></tr>';return;}
       for(const f of data.friends){
         const tr=document.createElement('tr');
         tr.innerHTML=`
@@ -185,6 +187,36 @@ $admin = current_admin();
         tbody.appendChild(tr);
       }
     }
+    async function loadRequests(){
+      const data=await api('friend-requests?status=all');
+      const tbody=document.querySelector('#requests-table tbody');
+      tbody.innerHTML='';
+      const rows=data.requests||[];
+      if(rows.length===0){
+        tbody.innerHTML='<tr><td colspan="4" class="muted">No pending requests</td></tr>';
+        return;
+      }
+      for(const req of rows){
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td>${escapeHtml(req.name)}</td>
+          <td class="muted">${escapeHtml(req.hostname||'—')}</td>
+          <td>${new Date(req.created_at).toLocaleString()}</td>
+          <td>
+            ${req.status==='pending'?`<button class="btn" style="padding:4px 8px;font-size:.75rem" onclick="approveRequest(${req.id})">Approve</button>
+            <button class="btn danger" style="padding:4px 8px;font-size:.75rem" onclick="rejectRequest(${req.id})">Reject</button>`:`<span class="muted">${escapeHtml(req.status)}</span>`}
+          </td>`;
+        tbody.appendChild(tr);
+      }
+    }
+    async function approveRequest(id){
+      await api('friend-requests-approve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
+      await loadRequests(); await loadFriends(); loadStats();
+    }
+    async function rejectRequest(id){
+      await api('friend-requests-reject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
+      await loadRequests();
+    }
+
     let allLogs=[];
     async function loadLogs(){
       const data=await api('logs');
@@ -298,73 +330,75 @@ $admin = current_admin();
       }catch(e){showToast(e.message,true);}
     }
     const severityColor={critical:'var(--danger)',warning:'#ffaa00',info:'var(--success)'};
-    function stripHtml(html){
-      const tmp=document.createElement('div');
-      tmp.innerHTML=html;
-      return tmp.textContent||tmp.innerText||'';
+        function stripHtml(html){
+    const tmp=document.createElement('div');
+    tmp.innerHTML=html;
+    return tmp.textContent||tmp.innerText||'';
     }
-        function downloadReportMarkdown(ev,id){
-      ev.stopPropagation();
-      const div=document.querySelector(`#reports-list .tree-group:has(.tree-header .meta button[onclick*="downloadReportMarkdown(event,${id})"])`);
-      if(!div) return;
-      const r=JSON.parse(div.dataset.report||'{}');
-      let md = r.markdown || '';
-      if(!md){
-        let findings=[];
-        try{findings=Array.isArray(r.findings)?r.findings:JSON.parse(r.findings||'[]');}catch(e){}
-        const date=new Date(r.created_at).toLocaleString();
-        md=`# ${r.title||'Untitled report'}
+    function downloadReportMarkdown(ev,id){
+    ev.stopPropagation();
+    const div=document.querySelector(`#reports-list .tree-group:has(.tree-header .meta button[onclick*="downloadReportMarkdown(event,${id})"])`);
+    if(!div) return;
+    const r=JSON.parse(div.dataset.report||'{}');
+    let md = r.markdown || '';
+    if(!md){
+    let findings=[];
+    try{findings=Array.isArray(r.findings)?r.findings:JSON.parse(r.findings||'[]');}catch(e){}
+    const date=new Date(r.created_at).toLocaleString();
+    md=`# ${r.title||'Untitled report'}
 
-`;
-        md+=`- **Friend:** ${r.friend_name||'unknown'}
-`;
-        md+=`- **Session:** ${r.session_id||'unknown'}
-`;
-        md+=`- **Created:** ${date}
-`;
-        md+=`- **Model:** ${r.model||'unknown'}
+    `;
+    md+=`- **Friend:** ${r.friend_name||'unknown'}
+    `;
+    md+=`- **Session:** ${r.session_id||'unknown'}
+    `;
+    md+=`- **Created:** ${date}
+    `;
+    md+=`- **Model:** ${r.model||'unknown'}
 
-`;
-        md+=`## Summary
+    `;
+    md+=`## Summary
 
-${(r.summary||'').trim()}
+    ${(r.summary||'').trim()}
 
-`;
-        if(findings.length){
-          md+=`## Findings
+    `;
+    if(findings.length){
+    md+=`## Findings
 
-`;
-          for(const f of findings){
-            md+=`### [${(f.severity||'info').toUpperCase()}] ${f.title||''} (${f.category||'other'})
+    `;
+    for(const f of findings){
+    md+=`### [${(f.severity||'info').toUpperCase()}] ${f.title||''} (${f.category||'other'})
 
-${(f.details||'').trim()}
+    ${(f.details||'').trim()}
 
-`;
-          }
-        }
-      }
-      const blob=new Blob([md],{type:'text/markdown'});
-      const url=URL.createObjectURL(blob);
-      const a=document.createElement('a');
-      a.href=url;
-      a.download=`report_${r.id||id}_${(r.title||'report').replace(/\s+/g,'_').toLowerCase()}.md`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+    `;
+    }
+    }
+    }
+    const blob=new Blob([md],{type:'text/markdown'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=`report_${r.id||id}_${(r.title||'report').replace(/\s+/g,'_').toLowerCase()}.md`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
     }
 
-function mdToHtml(s){
-      if(!s) return '';
-      return escapeHtml(s)
-        .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-        .replace(/^\s*-\s+(.+)$/gm,'<li>$1</li>')
-        .replace(/\n/g,'<br>');
+    function mdToHtml(s){
+    if(!s) return '';
+    return escapeHtml(s)
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/^\s*-\s+(.+)$/gm,'<li>$1</li>')
+    .replace(/\n/g,'<br>');
     }
+
     async function loadReports(){
       const data=await api('reports');
       const list=document.getElementById('reports-list');
-      if(data.reports.length===0){list.innerHTML='<p class="muted">No reports yet. Select logs and click Analyze with AI.</p>';return;}
+      if(!list){console.error('reports-list not found');return;}
+      if(!data.reports||data.reports.length===0){list.innerHTML='<p class="muted">No reports yet. Select logs and click Analyze with AI.</p>';return;}
       list.innerHTML='';
       for(const r of data.reports){
         const div=document.createElement('div');
@@ -380,7 +414,11 @@ function mdToHtml(s){
         list.appendChild(div);
       }
     }
-    (async()=>{await loadStats();await loadFriends();await loadRequests();await loadLogs();await loadReports();})();
+    (async()=>{
+      for(const fn of [loadStats,loadFriends,loadRequests,loadLogs,loadReports]){
+        try{await fn();}catch(e){console.error(e);showToast(e.message,true);}
+      }
+    })();
   </script>
 </body>
 </html>
