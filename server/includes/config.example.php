@@ -49,8 +49,4 @@ return [
     'setup' => [
         'enabled' => true,
     ],
-    'client' => [
-        'version'      => '1.0.0',
-        'download_url' => '',  // auto: https://your-domain/client/ArmaLogsClientSetup.exe
-    ],
 ];

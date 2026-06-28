@@ -20,9 +20,11 @@ try {
 
     .venv\Scripts\python -m pip install -r requirements.txt pyinstaller
 
-    .venv\Scripts\python -m PyInstaller ArmaLogsClient.spec --noconfirm --clean
+    .venv\Scripts\python -m PyInstaller $Spec --noconfirm --clean
 
-    Write-Host "Build complete: dist\ArmaLogsClient.exe" -ForegroundColor Green
+    & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" installer.iss
+
+    Write-Host "Build complete: dist\ArmaLogsClient.exe and dist\ArmaLogsClientSetup.exe" -ForegroundColor Green
 } finally {
     Pop-Location
 }

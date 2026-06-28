@@ -1,5 +1,6 @@
 """Watchdog-based log folder scanner."""
 import logging
+import re
 import socket
 import threading
 import time
@@ -77,12 +78,9 @@ class Watcher:
                 logger.exception("Failed to upload %s", session_dir.name)
 
     def check_update_now(self) -> None:
-        server = self.cfg.get("server_url")
-        if not server:
-            return
         try:
             from client import __version__
-            should_restart, msg = check_update(server, __version__)
+            should_restart, msg = check_update(__version__)
             if msg:
                 logger.info("Update check: %s", msg)
         except Exception:
