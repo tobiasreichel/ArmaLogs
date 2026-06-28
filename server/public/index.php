@@ -38,16 +38,18 @@ $admin = current_admin();
     dialog input, dialog textarea{width:100%;padding:10px 12px;background:#0f1115;border:1px solid #2c303a;border-radius:6px;color:var(--text);font:inherit;margin-top:6px}
     dialog textarea{min-height:80px;resize:vertical}
     .dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
-    .tree-group{margin-bottom:18px;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+    .tree-group{margin-bottom:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden}
     .tree-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#111318;cursor:pointer;user-select:none}
     .tree-header:hover{background:#181b22}
     .tree-header .title{font-weight:600}
     .tree-header .meta{font-size:.8rem;color:var(--muted)}
-    .tree-body{display:none;background:var(--panel)}
+    .tree-body{display:none;background:var(--panel);padding-left:18px}
     .tree-body.open{display:block}
     .tree-body table{margin:0;border:0;border-radius:0}
     .tree-body tbody tr:last-child td{border-bottom:0}
-    .tree-indent{padding-left:22px;font-size:.85rem;color:var(--muted)}
+    .session-row{background:#151821}
+    .session-row:hover{background:#1b202b}
+    .section-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
     .toast{position:fixed;bottom:20px;right:20px;background:var(--panel);border:1px solid var(--border);padding:14px 18px;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.3);display:none;max-width:420px}
   </style>
 </head>
@@ -178,14 +180,25 @@ $admin = current_admin();
       allLogs=data.logs;
       applyLogFilter();
     }
-    function groupBySession(logs){
-      const groups={};
+    function groupByFriendSession(logs){
+      const friends={};
       for(const l of logs){
-        const key=(l.friend_name||'unknown')+'::'+(l.session_id||'unknown');
-        if(!groups[key]) groups[key]={friend:l.friend_name||'unknown',session:l.session_id||'unknown',items:[]};
-        groups[key].items.push(l);
+        const friend=l.friend_name||'unknown';
+        const session=l.session_id||'unknown';
+        if(!friends[friend]) friends[friend]={sessions:{}};
+        if(!friends[friend].sessions[session]) friends[friend].sessions[session]=[];
+        friends[friend].sessions[session].push(l);
       }
-      return Object.values(groups).sort((a,b)=>b.items[0].uploaded_at.localeCompare(a.items[0].uploaded_at));
+      const result=[];
+      for(const friend of Object.keys(friends).sort()){
+        const sessions=[];
+        for(const session of Object.keys(friends[friend].sessions).sort()){
+          const items=friends[friend].sessions[session].sort((a,b)=>a.filename.localeCompare(b.filename));
+          sessions.push({session,items});
+        }
+        result.push({friend,sessions});
+      }
+      return result;
     }
     function applyLogFilter(){
       const filter=document.getElementById('log-filter').value.toLowerCase();
@@ -196,29 +209,40 @@ $admin = current_admin();
       );
       const tree=document.getElementById('logs-tree');
       tree.innerHTML='';
-      const groups=groupBySession(filtered);
+      const groups=groupByFriendSession(filtered);
       for(const g of groups){
-        const totalBytes=g.items.reduce((s,l)=>s+(l.file_size||0),0);
-        const div=document.createElement('div');
-        div.className='tree-group';
-        div.innerHTML=`
+        const friendTotal=g.sessions.reduce((s,sess)=>s+sess.items.reduce((ss,l)=>ss+(l.file_size||0),0),0);
+        const friendFiles=g.sessions.reduce((s,sess)=>s+sess.items.length,0);
+        const friendDiv=document.createElement('div');
+        friendDiv.className='tree-group';
+        friendDiv.innerHTML=`
           <div class="tree-header" onclick="toggleTree(this)">
-            <div class="title">${escapeHtml(g.friend)} / ${escapeHtml(g.session)}</div>
-            <div class="meta">${g.items.length} file${g.items.length===1?'':'s'} · ${fmtBytes(totalBytes)}</div>
+            <div class="title">${escapeHtml(g.friend)}</div>
+            <div class="meta">${g.sessions.length} session${g.sessions.length===1?'':'s'} · ${friendFiles} file${friendFiles===1?'':'s'} · ${fmtBytes(friendTotal)}</div>
           </div>
-          <div class="tree-body">
-            <table>
-              <thead><tr><th width="40"><input type="checkbox" class="group-check" onclick="selectGroup(this)"></th><th>Time</th><th>Filename</th><th>Size</th></tr></thead>
-              <tbody>${g.items.map(l=>`
-                <tr>
-                  <td><input type="checkbox" class="log-check" data-id="${l.id}"></td>
-                  <td>${new Date(l.uploaded_at).toLocaleString()}</td>
-                  <td>${escapeHtml(l.filename)}</td>
-                  <td>${fmtBytes(l.file_size)}</td>
-                </tr>`).join('')}</tbody>
-            </table>
-          </div>`;
-        tree.appendChild(div);
+          <div class="tree-body">${g.sessions.map(sess=>{
+            const sessTotal=sess.items.reduce((s,l)=>s+(l.file_size||0),0);
+            return `
+            <div class="tree-group" style="border:0;border-bottom:1px solid var(--border);margin-bottom:0">
+              <div class="tree-header session-row" onclick="toggleTree(this)">
+                <div class="title" style="font-weight:500">${escapeHtml(sess.session)}</div>
+                <div class="meta">${sess.items.length} file${sess.items.length===1?'':'s'} · ${fmtBytes(sessTotal)}</div>
+              </div>
+              <div class="tree-body">
+                <table>
+                  <thead><tr><th width="40"><input type="checkbox" class="group-check" onclick="selectGroup(this)"></th><th>Time</th><th>Filename</th><th>Size</th></tr></thead>
+                  <tbody>${sess.items.map(l=>`
+                    <tr>
+                      <td><input type="checkbox" class="log-check" data-id="${l.id}"></td>
+                      <td>${new Date(l.uploaded_at).toLocaleString()}</td>
+                      <td>${escapeHtml(l.filename)}</td>
+                      <td>${fmtBytes(l.file_size)}</td>
+                    </tr>`).join('')}</tbody>
+                </table>
+              </div>
+            </div>`;
+          }).join('')}</div>`;
+        tree.appendChild(friendDiv);
       }
     }
     function toggleTree(header){
