@@ -550,7 +550,7 @@ function call_ollama(array $cfg, array $rows, string $context): ?array {
         ],
     ];
 
-    $url = $baseUrl . '/api/generate';
+    $url = str_ends_with($baseUrl, '/api') ? $baseUrl . '/generate' : $baseUrl . '/api/generate';
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_POST           => true,
