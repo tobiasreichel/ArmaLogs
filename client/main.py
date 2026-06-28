@@ -67,6 +67,7 @@ class TrayApp:
         if not self.cfg.is_complete():
             if not run_setup_dialog():
                 return
+            self.cfg = default_config()
         self._thread = threading.Thread(target=self._watch, daemon=True)
         self._thread.start()
         self.icon.run()
