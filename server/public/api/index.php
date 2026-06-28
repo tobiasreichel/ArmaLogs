@@ -602,6 +602,7 @@ function call_openai(array $cfg, array $rows, string $context): ?array {
 
 function call_ollama(array $cfg, array $rows, string $context): ?array {
     $baseUrl = rtrim($cfg['base_url'] ?? '', '/');
+    $apiKey = $cfg['api_key'] ?? '';
     $model = $cfg['model'];
     $friend = $rows[0]['friend_name'] ?? 'unknown';
     $session = $rows[0]['session_id'] ?? 'unknown';
@@ -641,22 +642,28 @@ function call_ollama(array $cfg, array $rows, string $context): ?array {
         "LOG CONTENT:\n" . $context . "\n\nReturn only raw Markdown.";
 
     $payload = [
-        'model'   => $model,
-        'prompt'  => $system . "\n\n" . $userPrompt,
-        'stream'  => false,
+        'model'    => $model,
+        'messages' => [
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user',   'content' => $userPrompt],
+        ],
+        'stream' => false,
         'options' => [
             'num_ctx' => (int)($cfg['num_ctx'] ?? 8192),
         ],
     ];
 
-    $url = str_ends_with($baseUrl, '/api') ? $baseUrl . '/generate' : $baseUrl . '/api/generate';
+    $url = str_ends_with($baseUrl, '/api') ? $baseUrl . '/chat' : $baseUrl . '/api/chat';
+    $headers = ['Content-Type: application/json'];
+    if ($apiKey !== '') {
+        $headers[] = 'Authorization: Bearer ' . $apiKey;
+    }
+
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_POST           => true,
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER     => [
-            'Content-Type: application/json',
-        ],
+        CURLOPT_HTTPHEADER     => $headers,
         CURLOPT_POSTFIELDS     => json_encode($payload),
         CURLOPT_CONNECTTIMEOUT => 30,
         CURLOPT_TIMEOUT        => 300,
@@ -670,12 +677,12 @@ function call_ollama(array $cfg, array $rows, string $context): ?array {
     }
 
     $data = json_decode($resp, true);
-    if (empty($data['response'])) {
+    if (empty($data['message']['content'])) {
         error_log('Ollama API unexpected response: ' . $resp);
         return null;
     }
 
-    $markdown = trim($data['response']);
+    $markdown = trim($data['message']['content']);
     if (preg_match('/^```markdown\s*(.*?)\s*```$/s', $markdown, $m)) {
         $markdown = trim($m[1]);
     } elseif (preg_match('/^```\s*(.*?)\s*```$/s', $markdown, $m)) {

@@ -36,7 +36,7 @@ return [
     'ai' => [
         'enabled'    => false,
         'provider'   => 'anthropic',   // anthropic, ollama, or openai
-        'base_url'   => '',            // anthropic: https://openlimits.app ; ollama: https://ollama.com/api ; openai: https://openrouter.ai/api
+        'base_url'   => '',            // anthropic: https://openlimits.app ; ollama: https://ollama.com ; openai: https://openrouter.ai/api
         'api_key'    => '',
         'model'      => 'claude-3-5-sonnet-20241022',
         'max_tokens' => 128000,
