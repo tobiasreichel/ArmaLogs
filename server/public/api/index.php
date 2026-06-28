@@ -264,7 +264,7 @@ function serve_logs_zip(): void {
         json_error('Failed to create zip', 500);
     }
 
-    $base = config('storage_dir', '/app/data/storage/logs');
+    $base = rtrim(config()['paths']['storage'] ?? '/app/data/storage/logs', '/');
     foreach ($rows as $row) {
         $path = rtrim($base, '/') . '/' . ltrim($row['storage_path'], '/');
         if (!file_exists($path)) {
