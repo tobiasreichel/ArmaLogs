@@ -38,13 +38,16 @@ $admin = current_admin();
     dialog input, dialog textarea{width:100%;padding:10px 12px;background:#0f1115;border:1px solid #2c303a;border-radius:6px;color:var(--text);font:inherit;margin-top:6px}
     dialog textarea{min-height:80px;resize:vertical}
     .dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
-    .section-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-    .section-title h2{margin:0}
-    .checkbox-col{width:40px}
-    .toolbar{display:flex;gap:10px;margin-bottom:12px}
-    .toolbar .btn{padding:6px 12px;font-size:.85rem}
-    .filter-row{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap}
-    .filter-row input, .filter-row select{padding:8px 12px;background:#0f1115;border:1px solid #2c303a;border-radius:6px;color:var(--text);font:inherit}
+    .tree-group{margin-bottom:18px;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+    .tree-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#111318;cursor:pointer;user-select:none}
+    .tree-header:hover{background:#181b22}
+    .tree-header .title{font-weight:600}
+    .tree-header .meta{font-size:.8rem;color:var(--muted)}
+    .tree-body{display:none;background:var(--panel)}
+    .tree-body.open{display:block}
+    .tree-body table{margin:0;border:0;border-radius:0}
+    .tree-body tbody tr:last-child td{border-bottom:0}
+    .tree-indent{padding-left:22px;font-size:.85rem;color:var(--muted)}
     .toast{position:fixed;bottom:20px;right:20px;background:var(--panel);border:1px solid var(--border);padding:14px 18px;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.3);display:none;max-width:420px}
   </style>
 </head>
@@ -91,23 +94,18 @@ $admin = current_admin();
     </section>
 
     <section style="margin-top:32px">
-      <div class="section-title">
-        <h2>Recent logs</h2>
+      <div class="section-title" style="margin-bottom:12px">
+        <h2>Logs by session</h2>
       </div>
-      <div class="toolbar">
-        <button class="btn" onclick="selectAllLogs(true)">Select all</button>
-        <button class="btn" onclick="selectAllLogs(false)">Deselect</button>
+      <div class="toolbar" style="margin-bottom:12px">
+        <button class="btn" onclick="expandAllTrees(true)">Expand all</button>
+        <button class="btn" onclick="expandAllTrees(false)">Collapse all</button>
         <button class="btn" onclick="downloadSelectedLogs()">Download .zip</button>
       </div>
-      <div class="filter-row">
+      <div class="filter-row" style="margin-bottom:12px">
         <input id="log-filter" placeholder="Search filename / session / friend" oninput="applyLogFilter()">
       </div>
-      <table id="logs-table">
-        <thead>
-          <tr><th class="checkbox-col"><input type="checkbox" id="logs-select-all" onclick="selectAllLogs(this.checked)"></th><th>Time</th><th>Friend</th><th>Session</th><th>Filename</th><th>Size</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+      <div id="logs-tree"></div>
     </section>
   </main>
 
@@ -180,6 +178,15 @@ $admin = current_admin();
       allLogs=data.logs;
       applyLogFilter();
     }
+    function groupBySession(logs){
+      const groups={};
+      for(const l of logs){
+        const key=(l.friend_name||'unknown')+'::'+(l.session_id||'unknown');
+        if(!groups[key]) groups[key]={friend:l.friend_name||'unknown',session:l.session_id||'unknown',items:[]};
+        groups[key].items.push(l);
+      }
+      return Object.values(groups).sort((a,b)=>b.items[0].uploaded_at.localeCompare(a.items[0].uploaded_at));
+    }
     function applyLogFilter(){
       const filter=document.getElementById('log-filter').value.toLowerCase();
       const filtered=allLogs.filter(l=>
@@ -187,23 +194,42 @@ $admin = current_admin();
         (l.session_id||'').toLowerCase().includes(filter)||
         (l.filename||'').toLowerCase().includes(filter)
       );
-      const tbody=document.querySelector('#logs-table tbody');
-      tbody.innerHTML='';
-      for(const l of filtered.slice(0,50)){
-        const tr=document.createElement('tr');
-        tr.innerHTML=`
-          <td><input type="checkbox" class="log-check" data-id="${l.id}"></td>
-          <td>${new Date(l.uploaded_at).toLocaleString()}</td>
-          <td>${escapeHtml(l.friend_name)}</td>
-          <td><span class="token">${escapeHtml(l.session_id||'unknown')}</span></td>
-          <td>${escapeHtml(l.filename)}</td>
-          <td>${fmtBytes(l.file_size)}</td>`;
-        tbody.appendChild(tr);
+      const tree=document.getElementById('logs-tree');
+      tree.innerHTML='';
+      const groups=groupBySession(filtered);
+      for(const g of groups){
+        const totalBytes=g.items.reduce((s,l)=>s+(l.file_size||0),0);
+        const div=document.createElement('div');
+        div.className='tree-group';
+        div.innerHTML=`
+          <div class="tree-header" onclick="toggleTree(this)">
+            <div class="title">${escapeHtml(g.friend)} / ${escapeHtml(g.session)}</div>
+            <div class="meta">${g.items.length} file${g.items.length===1?'':'s'} · ${fmtBytes(totalBytes)}</div>
+          </div>
+          <div class="tree-body">
+            <table>
+              <thead><tr><th width="40"><input type="checkbox" class="group-check" onclick="selectGroup(this)"></th><th>Time</th><th>Filename</th><th>Size</th></tr></thead>
+              <tbody>${g.items.map(l=>`
+                <tr>
+                  <td><input type="checkbox" class="log-check" data-id="${l.id}"></td>
+                  <td>${new Date(l.uploaded_at).toLocaleString()}</td>
+                  <td>${escapeHtml(l.filename)}</td>
+                  <td>${fmtBytes(l.file_size)}</td>
+                </tr>`).join('')}</tbody>
+            </table>
+          </div>`;
+        tree.appendChild(div);
       }
     }
-    function selectAllLogs(checked){
-      document.querySelectorAll('.log-check').forEach(cb=>cb.checked=checked);
-      document.getElementById('logs-select-all').checked=checked;
+    function toggleTree(header){
+      header.nextElementSibling.classList.toggle('open');
+    }
+    function expandAllTrees(open){
+      document.querySelectorAll('.tree-body').forEach(b=>open?b.classList.add('open'):b.classList.remove('open'));
+    }
+    function selectGroup(cb){
+      cb.closest('.tree-group').querySelectorAll('.log-check').forEach(c=>c.checked=cb.checked);
+      cb.stopPropagation();
     }
     async function downloadSelectedLogs(){
       const ids=Array.from(document.querySelectorAll('.log-check:checked')).map(cb=>parseInt(cb.dataset.id));
