@@ -312,7 +312,7 @@ $admin = current_admin();
       header.nextElementSibling.classList.toggle('open');
     }
     function expandAllTrees(open){
-      document.querySelectorAll('.tree-body').forEach(b=>open?b.classList.add('open'):b.classList.remove('open'));
+      document.querySelectorAll('#logs .tree-body').forEach(b=>open?b.classList.add('open'):b.classList.remove('open'));
     }
     function selectGroup(cb){
       const group=cb.closest('.tree-group');
