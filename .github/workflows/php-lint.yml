@@ -1,0 +1,28 @@
+name: PHP Lint
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**/*.php'
+  pull_request:
+    paths:
+      - 'server/**/*.php'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+
+      - name: Lint PHP files
+        run: |
+          set -e
+          find server/public server/includes -name '*.php' -print0 | while IFS= read -r -d '' file; do
+            php -l "$file"
+          done

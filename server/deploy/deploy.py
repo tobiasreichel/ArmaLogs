@@ -17,6 +17,7 @@ Optional:
     ARMALOGS_INCLUDES_DIR local includes dir (default: server/includes)
 """
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -87,19 +88,23 @@ def main() -> int:
 
     print("Linting PHP files before deploy...")
     php_files = sorted(set(LOCAL_PUBLIC.rglob("*.php")) | set(LOCAL_INCLUDES.rglob("*.php")))
-    for path in php_files:
-        result = subprocess.run(
-            ["php", "-l", str(path)],
-            capture_output=True,
-            text=True,
-            cwd=ROOT,
-        )
-        if result.returncode != 0:
-            print(f"PHP lint failed for {path}:")
-            print(result.stdout)
-            print(result.stderr)
-            return 1
-    print(f"Linted {len(php_files)} PHP files.")
+    php_cmd = shutil.which("php")
+    if php_cmd is None:
+        print("WARNING: php not found in PATH; skipping lint. Install PHP or rely on CI.")
+    else:
+        for path in php_files:
+            result = subprocess.run(
+                [php_cmd, "-l", str(path)],
+                capture_output=True,
+                text=True,
+                cwd=ROOT,
+            )
+            if result.returncode != 0:
+                print(f"PHP lint failed for {path}:")
+                print(result.stdout)
+                print(result.stderr)
+                return 1
+        print(f"Linted {len(php_files)} PHP files.")
 
     transport = paramiko.Transport((HOST, PORT))
     transport.connect(username=USER, password=PASS)
