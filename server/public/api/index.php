@@ -633,13 +633,14 @@ Common root-cause patterns you MUST recognize:
 
 Output rules:
 - Use only Markdown. No JSON. No markdown code fences around the whole report.
-- Start with one sharp TL;DR sentence that says whether the session is healthy, has stutter, has a crash, or has a spawn failure.
-- Then a short ## Summary (2-4 sentences). Bold the key mod names and class/function names.
+- Start with one sharp TL;DR sentence. It must be specific and not catastrophize. Examples: "Session is healthy with minor mod warnings." / "Severe per-frame JWK camera/inventory stutter from a broken catalog." / "Native engine crash likely caused by earlier script-side memory corruption." / "Multiple vehicle prefabs fail to spawn due to a component conflict."
+- Then a short ## Summary (3-5 sentences). Bold the key mod names and class/function names. State what actually happened in the log, not speculation beyond the evidence.
 - Then ## Findings with ### Severity: Title sub-headings. Severity must be one of: Critical, Warning, Info.
-- For each finding, include: (1) the likely offending mod or class, (2) the evidence pattern, (3) the recommended fix.
+- For each finding, include: (1) the likely offending mod or class, (2) the exact evidence pattern that points to it, (3) the concrete next step to fix it.
 - Maximum 6 findings. Merge similar repeated exceptions into one finding.
 - Do not paste long log excerpts. Cite a single representative line if needed.
 - If the session is basically healthy, write only the TL;DR and Summary and omit Findings.
+- Do not claim the mission ended, the game crashed to desktop, or players were kicked unless the log contains explicit evidence such as "ENGINE (F): Crashed", a .mdmp file, or a clear disconnect/disconnect line.
 SYS;
 
     $userPrompt = "Analyze the following Arma Reforger log(s) from friend '$friend' (session '$session').\n\n" .
