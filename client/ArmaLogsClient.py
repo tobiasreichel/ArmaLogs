@@ -15,5 +15,9 @@ sys.path.insert(0, str(bundle_dir))
 
 from client.main import main
 
+
+__version__ = "1.0.0"
+
+
 if __name__ == "__main__":
     main()

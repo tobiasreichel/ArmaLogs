@@ -1,17 +1,22 @@
 """Watchdog-based log folder scanner."""
 import logging
 import socket
+import threading
 import time
 from pathlib import Path
 from typing import Callable
 
+import requests
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 from .config import Config
-from .uploader import LOG_SESSION_RE, upload_session
+from .uploader import upload_session
+from .updater import check_update
+
 
 logger = logging.getLogger("armalogs.watcher")
+LOG_SESSION_RE = re.compile(r"logs_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}")
 
 
 class LogFolderHandler(FileSystemEventHandler):
@@ -71,6 +76,18 @@ class Watcher:
             except Exception:
                 logger.exception("Failed to upload %s", session_dir.name)
 
+    def check_update_now(self) -> None:
+        server = self.cfg.get("server_url")
+        if not server:
+            return
+        try:
+            from client import __version__
+            should_restart, msg = check_update(server, __version__)
+            if msg:
+                logger.info("Update check: %s", msg)
+        except Exception:
+            logger.exception("Update check failed")
+
     def start(self) -> None:
         root = Path(self.cfg.get("log_root"))
         if not root.is_dir():
@@ -78,6 +95,9 @@ class Watcher:
 
         # Upload any backlog before watching
         self.run_once()
+
+        # Check for updates on startup (detached so UI is responsive)
+        threading.Thread(target=self.check_update_now, daemon=True).start()
 
         handler = LogFolderHandler(on_session=self._on_new_session)
         self._observer = Observer()

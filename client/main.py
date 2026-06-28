@@ -13,6 +13,9 @@ from .setup_dialog import run_setup_dialog
 from .watcher import Watcher
 
 
+__version__ = "1.0.0"
+
+
 def create_image():
     width = 64
     height = 64
@@ -34,6 +37,7 @@ class TrayApp:
             "ArmaLogs",
             menu=pystray.Menu(
                 pystray.MenuItem("Upload now", self.upload_now),
+                pystray.MenuItem("Check for updates", self.check_updates),
                 pystray.MenuItem("Edit settings", self.edit_settings),
                 pystray.MenuItem("Open config folder", self.open_config),
                 pystray.MenuItem("Exit", self.exit),
@@ -46,6 +50,10 @@ class TrayApp:
     def upload_now(self, icon, item):
         if self.watcher:
             threading.Thread(target=self.watcher.run_once, daemon=True).start()
+
+    def check_updates(self, icon, item):
+        if self.watcher:
+            threading.Thread(target=self.watcher.check_update_now, daemon=True).start()
 
     def edit_settings(self, icon, item):
         if self.watcher:
