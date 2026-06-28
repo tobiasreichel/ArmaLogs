@@ -229,7 +229,7 @@ $admin = current_admin();
     }
     function selectGroup(cb){
       cb.closest('.tree-group').querySelectorAll('.log-check').forEach(c=>c.checked=cb.checked);
-      cb.stopPropagation();
+      if(window.event) window.event.stopPropagation();
     }
     async function downloadSelectedLogs(){
       const ids=Array.from(document.querySelectorAll('.log-check:checked')).map(cb=>parseInt(cb.dataset.id));
