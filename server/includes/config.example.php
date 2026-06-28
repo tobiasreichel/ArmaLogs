@@ -35,13 +35,13 @@ return [
     ],
     'ai' => [
         'enabled'    => false,
-        'provider'   => 'anthropic',   // anthropic or ollama
-        'base_url'   => '',            // anthropic: https://openlimits.app ; ollama: http://host:11434 (no /api)
+        'provider'   => 'anthropic',   // anthropic, ollama, or openai
+        'base_url'   => '',            // anthropic: https://openlimits.app ; ollama: https://ollama.com/api ; openai: https://openrouter.ai/api
         'api_key'    => '',
         'model'      => 'claude-3-5-sonnet-20241022',
         'max_tokens' => 128000,
         'max_chars'  => 800000,
-        'num_ctx'    => 8192,          // ollama only: context window size
+        'num_ctx'    => 8192,          // ollama only
     ],
     'setup' => [
         'enabled' => true,
