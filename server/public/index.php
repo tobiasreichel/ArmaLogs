@@ -7,7 +7,7 @@ require_once __DIR__ . '/../includes/helpers.php';
 
 require_admin();
 $admin = current_admin();
-?x>
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>

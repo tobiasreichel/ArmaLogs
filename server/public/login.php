@@ -11,7 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $error = 'Invalid username or password.';
 }
-?x>
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
