@@ -357,8 +357,9 @@ function handle_analyze(): void {
         if ($remaining <= 0) {
             break;
         }
-        $header = "\n\n===== " . $row['friend_name'] . " / " . ($row['session_id'] ?? 'unknown') . " / " . $row['filename'] . " =====\n";
-        $budget = $remaining - strlen($header);
+        $header = "\n\n===== BEGIN LOG: friend=" . $row['friend_name'] . ", session=" . ($row['session_id'] ?? 'unknown') . ", file=" . $row['filename'] . " =====\n";
+        $footer = "\n===== END LOG: " . $row['filename'] . " =====\n";
+        $budget = $remaining - strlen($header) - strlen($footer);
         if ($budget <= 0) {
             break;
         }
@@ -366,7 +367,7 @@ function handle_analyze(): void {
             $half = (int)($budget / 2);
             $text = substr($text, 0, $half) . "\n\n... [truncated] ...\n\n" . substr($text, -$half);
         }
-        $context .= $header . $text;
+        $context .= $header . $text . $footer;
         $read++;
     }
 
@@ -662,8 +663,10 @@ SYS;
         "- **Evidence pattern:** one or two representative log lines or the exact error signature.\n" .
         "- **Concrete fix:** the next step the admin should take.\n\n" .
         "If the provided context includes multiple friends or multiple sessions for the same player, add a short ## Cross-Check section at the end noting:\n" .
-        "- Whether the same exceptions appear across sessions (getting worse, getting better, or new).\n" .
-        "- Whether the same issues hit multiple players at the same time (points to server/modset) vs one player only (points to client state or local config).\n\n" .
+        "- Treat each BEGIN/END LOG block as a separate session. Do not combine unrelated sessions into a single story or timeline.\n" .
+        "- Do not assume all selected logs are from the same server, mission, or modset.\n" .
+        "- If logs are from different friends, compare whether the same exceptions appear across clients (server/modset issue) vs one client only (local issue).\n" .
+        "- If logs are from different sessions for the same player, note whether the issue is getting worse, getting better, or new.\n\n" .
         "Do not claim the mission ended, the game crashed to desktop, or players were kicked unless the log contains explicit evidence such as 'ENGINE (F): Crashed', a .mdmp file, or a clear disconnect line.\n\n" .
         "LOG CONTENT:\n" . $context . "\n\nReturn only raw Markdown.";
 
