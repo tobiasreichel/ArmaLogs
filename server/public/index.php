@@ -118,7 +118,7 @@ $admin = current_admin();
       <div class="filter-row" style="margin-bottom:12px">
         <input id="log-filter" placeholder="Search filename / session / friend" oninput="applyLogFilter()">
       </div>
-      <div id="logs-tree"></div>
+      <div id="logs" class="tree"></div>
     </section>
   </main>
 
@@ -266,7 +266,7 @@ $admin = current_admin();
         (l.session_id||'').toLowerCase().includes(filter)||
         (l.filename||'').toLowerCase().includes(filter)
       );
-      const tree=document.getElementById('logs-tree');
+      const tree=document.getElementById('logs');
       tree.innerHTML='';
       const groups=groupByFriendSession(filtered);
       for(const g of groups){
