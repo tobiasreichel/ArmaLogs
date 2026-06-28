@@ -297,26 +297,32 @@ $admin = current_admin();
         await loadReports();loadStats();showToast(`AI report created: ${data.report.title}`);
       }catch(e){showToast(e.message,true);}
     }
+    const severityColor={critical:'var(--danger)',warning:'#ffaa00',info:'var(--success)'};
     async function loadReports(){
       const data=await api('reports');
       const list=document.getElementById('reports-list');
       if(data.reports.length===0){list.innerHTML='<p class="muted">No reports yet. Select logs and click Analyze with AI.</p>';return;}
       list.innerHTML='';
       for(const r of data.reports){
-        const findings=Array.isArray(r.findings)?r.findings:JSON.parse(r.findings||'[]');
+        let findings=[];
+        try{findings=Array.isArray(r.findings)?r.findings:JSON.parse(r.findings||'[]');}catch(e){}
         const div=document.createElement('div');
         div.className='tree-group';
         div.innerHTML=`<div class="tree-header" onclick="toggleTree(this)">
-          <div class="title">${escapeHtml(r.title)}</div>
-          <div class="meta">${escapeHtml(r.friend_name||'unknown')} / ${escapeHtml(r.session_id||'unknown')} · ${new Date(r.created_at).toLocaleString()} · ${r.model}</div>
+          <div class="title">${escapeHtml(r.title||'Untitled report')}</div>
+          <div class="meta">${escapeHtml(r.friend_name||'unknown')} / ${escapeHtml(r.session_id||'unknown')} · ${new Date(r.created_at).toLocaleString()}</div>
         </div>
-        <div class="tree-body" style="padding:14px">
-          <p>${escapeHtml(r.summary).replace(/\n/g,'<br>')}</p>
-          ${findings.length?'<h4 style="margin:12px 0 6px">Findings</h4>'+findings.map(f=>`
-            <div style="margin-bottom:10px;border-left:3px solid ${f.severity==='critical'?'var(--danger)':f.severity==='warning'?'#ffaa00':'var(--success)'};padding-left:10px">
-              <strong>${escapeHtml(f.title)}</strong> <span class="muted">(${escapeHtml(f.severity)} · ${escapeHtml(f.category)})</span><br>
-              <span>${escapeHtml(f.details)}</span>
-            </div>`).join(''):''}
+        <div class="tree-body" style="padding:16px">
+          <p style="line-height:1.5">${escapeHtml(r.summary||'').replace(/\n/g,'<br>')}</p>
+          ${findings.length?'<div style="margin-top:14px"><h4 style="margin:0 0 10px">Findings</h4>'+findings.map(f=>`
+            <div class="finding" style="margin-bottom:12px;border-left:4px solid ${severityColor[f.severity]||'var(--muted)'};padding:8px 12px;background:#0f1115;border-radius:0 6px 6px 0">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                <span style="font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;font-weight:600;color:${severityColor[f.severity]||'var(--muted)'}">${escapeHtml(f.severity||'info')}</span>
+                <span class="muted" style="font-size:.8rem">${escapeHtml(f.category||'other')}</span>
+              </div>
+              <strong style="display:block;margin-bottom:4px">${escapeHtml(f.title||'')}</strong>
+              <div style="font-size:.9rem;color:var(--muted);line-height:1.4">${escapeHtml(f.details||'').replace(/\n/g,'<br>')}</div>
+            </div>`).join('')+'</div>':''}
         </div>`;
         list.appendChild(div);
       }
