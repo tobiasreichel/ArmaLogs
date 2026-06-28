@@ -5,6 +5,7 @@ require_once __DIR__ . '/_init.php';
 
 require_once INCLUDES_DIR . '/config.php';
 require_once INCLUDES_DIR . '/db.php';
+require_once INCLUDES_DIR . '/helpers.php';
 
 $token = $_GET['token'] ?? '';
 if ($token === '' || !preg_match('/^[a-f0-9]{32}$/i', $token)) {
