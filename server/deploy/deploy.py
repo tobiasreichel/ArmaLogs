@@ -12,15 +12,24 @@ environment variables. Put this in your `.env` (never commit it):
     ARMALOGS_SFTP_USER=toreic@armalogs.reichel.network
     ARMALOGS_SFTP_PASS=your_password
 
-Optional:
-    ARMALOGS_PUBLIC_DIR  local public dir  (default: server/public)
-    ARMALOGS_INCLUDES_DIR local includes dir (default: server/includes)
+# Optional:
+#    ARMALOGS_SFTP_HOST  app SFTP host (NOT the Cloudron dashboard domain)
+#    ARMALOGS_SFTP_PORT  SFTP port (default 22)
+#    ARMALOGS_SFTP_USER  SFTP username
+#    ARMALOGS_SFTP_PASS  SFTP password
+#    ARMALOGS_DOMAIN     public HTTPS domain, used only to clear OPcache
+#
+# NOTE: For Cloudron, use the app's individual SFTP host (e.g. sftp.armalogs.reichel.network),
+# not the Cloudron dashboard domain (my.reichel.network).
+# The domain used for opcache_reset may differ from the SFTP host.
 """
 import os
+import secrets
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+from urllib.request import urlopen
 
 import paramiko
 
@@ -48,12 +57,38 @@ HOST = os.environ.get("ARMALOGS_SFTP_HOST", "")
 PORT = int(os.environ.get("ARMALOGS_SFTP_PORT", "22"))
 USER = os.environ.get("ARMALOGS_SFTP_USER", "")
 PASS = os.environ.get("ARMALOGS_SFTP_PASS", "")
+DOMAIN = os.environ.get("ARMALOGS_DOMAIN", HOST)
 
 LOCAL_PUBLIC = Path(os.environ.get("ARMALOGS_PUBLIC_DIR", ROOT / "server" / "public"))
 LOCAL_INCLUDES = Path(os.environ.get("ARMALOGS_INCLUDES_DIR", ROOT / "server" / "includes"))
 
 REMOTE_PUBLIC = "public"
 REMOTE_INCLUDES = "includes"
+
+
+def clear_remote_opcache(domain: str, sftp: paramiko.SFTPClient) -> None:
+    """Upload a temporary PHP script that calls opcache_reset(), hit it, then delete it."""
+    token = secrets.token_urlsafe(32)
+    script_name = f"opcache_clear_{token[:16]}.php"
+    local_path = ROOT / ".tmp_deploy" / script_name
+    local_path.parent.mkdir(parents=True, exist_ok=True)
+    local_path.write_text("<?php\nif (!function_exists('opcache_reset')) {\n    echo 'nocache';\n    exit;\n}\nopcache_reset();\necho 'ok';\n", encoding="utf-8")
+    remote_path = f"{REMOTE_PUBLIC}/{script_name}"
+    sftp.put(str(local_path), remote_path)
+    local_path.unlink()
+
+    url = f"https://{domain}/{script_name}"
+    try:
+        resp = urlopen(url, timeout=15)
+        body = resp.read().decode("utf-8", errors="ignore").strip()
+        print(f"OPcache clear: {body}")
+    except Exception as exc:
+        print(f"WARNING: could not clear OPcache via {url}: {exc}")
+    finally:
+        try:
+            sftp.remove(remote_path)
+        except OSError:
+            pass
 
 
 def ensure_remote_dir(sftp: paramiko.SFTPClient, remote_path: str) -> None:
@@ -112,6 +147,7 @@ def main() -> int:
     try:
         upload_dir(sftp, LOCAL_PUBLIC, REMOTE_PUBLIC)
         upload_dir(sftp, LOCAL_INCLUDES, REMOTE_INCLUDES)
+        clear_remote_opcache(DOMAIN, sftp)
         print("Deploy complete.")
     finally:
         sftp.close()

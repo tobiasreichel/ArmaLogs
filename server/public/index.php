@@ -52,6 +52,10 @@ $admin = current_admin();
     .session-row:hover{background:#1b202b}
     .section-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
     .toast{position:fixed;bottom:20px;right:20px;background:var(--panel);border:1px solid var(--border);padding:14px 18px;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.3);display:none;max-width:420px}
+    ul.mod-list{margin:0;padding-left:18px;font-size:.85rem;color:var(--muted)}
+    ul.mod-list li{margin:4px 0}
+    .session-mods{display:none}
+    .session-mods.open{display:block}
   </style>
 </head>
 <body>
@@ -175,14 +179,28 @@ $admin = current_admin();
       const i=Math.floor(Math.log(n)/Math.log(k));
       return (n/Math.pow(k,i)).toFixed(2)+' '+s[i];
     }
-    function renderModSummary(l){
+    function renderModSummary(l, inline=true){
       if(!l || !l.workshop_mods_json) return '';
       let list=[];
       try{ list=JSON.parse(l.workshop_mods_json); }catch(e){ return ''; }
       if(!Array.isArray(list) || list.length===0) return '';
       const preview=list.slice(0,3).map(m=>escapeHtml(m.name||m.workshop_id)).join(', ');
       const more=list.length>3?` and ${list.length-3} more` :'';
-      return ` · ${preview}${more}`;
+      return inline ? ` · ${preview}${more}` : `<ul class="mod-list">${list.map(m=>`<li>${escapeHtml(m.name||m.workshop_id)} <span class="muted">(${m.workshop_id||'no id'})</span></li>`).join('')}</ul>`;
+    }
+    function expandSessionMods(header){
+      const body=header.nextElementSibling;
+      if(!body) return;
+      const existing=body.querySelector('.session-mods');
+      if(existing){existing.classList.toggle('open');return;}
+      const meta=header.querySelector('.meta');
+      const json=meta?.dataset.mods;
+      if(!json) return;
+      const modsDiv=document.createElement('div');
+      modsDiv.className='session-mods open';
+      modsDiv.style='padding:12px 14px;background:#0d1117;border-top:1px solid var(--border);';
+      modsDiv.innerHTML=renderModSummary({workshop_mods_json:json}, false);
+      body.appendChild(modsDiv);
     }
     async function loadStats(){
       const s=await api('stats');
@@ -299,7 +317,7 @@ $admin = current_admin();
                   <input type="checkbox" class="session-check" data-ids="${allIds}" onclick="selectSession(this)">
                   ${escapeHtml(sess.session)}
                 </div>
-                <div class="meta">${sess.items.length} file${sess.items.length===1?'':'s'} · ${fmtBytes(sessTotal)}${sess.items[0]?.workshop_mod_count ? ` · ${sess.items[0].workshop_mod_count} Workshop mods` : ''}${renderModSummary(sess.items[0])}</div>
+                <div class="meta" data-mods="${escapeHtml(sess.items[0]?.workshop_mods_json||'')}">${sess.items.length} file${sess.items.length===1?'':'s'} · ${fmtBytes(sessTotal)}${sess.items[0]?.workshop_mod_count ? ` · ${sess.items[0].workshop_mod_count} Workshop mods · <button class="btn" style="padding:2px 8px;font-size:.75rem" onclick="expandSessionMods(this.closest('.session-row'))">List mods</button>` : ''}${renderModSummary(sess.items[0])}</div>
               </div>
               <div class="tree-body">
                 <table>
