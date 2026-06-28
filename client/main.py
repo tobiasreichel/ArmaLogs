@@ -14,7 +14,7 @@ from .updater import check_update
 from .watcher import Watcher
 
 
-__version__ = "1.1.5"
+__version__ = "1.1.6"
 
 
 def create_image():
@@ -32,6 +32,7 @@ class TrayApp:
         self.cfg = default_config()
         self.watcher: Watcher | None = None
         self._thread: threading.Thread | None = None
+        self._restart_event = threading.Event()
         self._title = f"ArmaLogs v{__version__}"
         self.icon = pystray.Icon(
             "armalogs",
@@ -65,8 +66,18 @@ class TrayApp:
             threading.Thread(target=self.watcher.run_once, daemon=True).start()
 
     def check_updates(self, icon, item):
+        def _do_check():
+            try:
+                from client import __version__
+                should_restart, msg = check_update(__version__, force=True)
+                logger.info("Update check: %s", msg)
+                if should_restart:
+                    self._restart_event.set()
+                    icon.stop()
+            except Exception:
+                logger.exception("Update check failed")
         if self.watcher:
-            threading.Thread(target=self.watcher.check_update_now, daemon=True).start()
+            threading.Thread(target=_do_check, daemon=True).start()
 
     def edit_settings(self, icon, item):
         if self.watcher:
@@ -92,6 +103,10 @@ class TrayApp:
         self._thread = threading.Thread(target=self._watch, daemon=True)
         self._thread.start()
         self.icon.run()
+        if self.watcher:
+            self.watcher.stop()
+        if self._restart_event.is_set():
+            sys.exit(0)
 
     def _watch(self):
         try:

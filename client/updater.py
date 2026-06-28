@@ -8,6 +8,7 @@ Mirrors the ProxTop pattern:
 """
 import json
 import logging
+import os
 import subprocess
 import sys
 import tempfile
@@ -93,11 +94,24 @@ def download_file(url: str, dst: Path) -> bool:
 def spawn_updater(installer: Path) -> None:
     """Write a small .bat updater, run it detached, then exit this process."""
     bat = installer.with_suffix(".bat")
+    my_pid = os.getpid()
+    exe = installed_exe_path()
+    exe_path = str(exe) if exe else str(Path(sys.executable).resolve())
     bat.write_text(
         "@echo off\n"
-        "timeout /t 2 /nobreak > nul\n"
-        f'"{installer}" /SILENT /NORESTART /SUPPRESSMSGBOXES /SP- /CLOSEAPPLICATIONS\n'
-        "timeout /t 5 /nobreak > nul\n"
+        "setlocal\n"
+        f'echo Waiting for parent PID {my_pid} to exit...\n'
+        f':wait\n'
+        f'tasklist /FI "PID eq {my_pid}" /NH | findstr /I "{my_pid}" >nul\n'
+        f'if not errorlevel 1 (\n'
+        f'    timeout /t 1 /nobreak >nul\n'
+        f'    goto wait\n'
+        f')\n'
+        "echo Running installer...\n"
+        f'"{installer}" /SILENT /NORESTART /SUPPRESSMSGBOXES /SP- /FORCECLOSEAPPLICATIONS /MERGETASKS="autostart"\n'
+        "timeout /t 2 /nobreak >nul\n"
+        f'start "" "{exe_path}"\n'
+        "timeout /t 2 /nobreak >nul\n"
         f'del /f /q "{installer}"\n'
         'del /f /q "%~f0"\n',
         encoding="utf-8",

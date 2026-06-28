@@ -1,5 +1,6 @@
 """Watchdog-based log folder scanner."""
 import logging
+import os
 import re
 import socket
 import threading
@@ -83,6 +84,9 @@ class Watcher:
             should_restart, msg = check_update(__version__)
             if msg:
                 logger.info("Update check: %s", msg)
+            if should_restart:
+                logger.info("Update downloaded; signalling app to exit")
+                os._exit(0)
         except Exception:
             logger.exception("Update check failed")
 
