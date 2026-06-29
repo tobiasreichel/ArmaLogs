@@ -55,36 +55,18 @@ def setup_logging(work_dir: Path) -> Path:
 
 
 def wait_for_parent(pid: int, timeout: int = 10) -> bool:
+    """Best-effort wait; not blocking. The main client calls os._exit right after spawning us,
+    so a short sleep is enough to release the locked executable."""
     if pid <= 0:
         logger.info("No parent PID to wait for")
         return True
 
-    kernel32 = ctypes.windll.kernel32
-    SYNCHRONIZE = 0x00100000
-    INFINITE = 0xFFFFFFFF
-    WAIT_OBJECT_0 = 0x00000000
-    WAIT_TIMEOUT = 0x00000102
-    WAIT_FAILED = 0xFFFFFFFF
-
-    h = kernel32.OpenProcess(SYNCHRONIZE, False, pid)
-    if not h:
-        logger.info("Parent PID %d already gone (OpenProcess failed), proceeding", pid)
-        return True
-
-    logger.info("Opened parent PID %d process handle; waiting up to %ds for it to exit", pid, timeout)
-    ms = int(timeout * 1000)
-    rc = kernel32.WaitForSingleObject(h, ms if ms > 0 else INFINITE)
-    kernel32.CloseHandle(h)
-
-    if rc == WAIT_OBJECT_0:
-        logger.info("Parent PID %d has exited", pid)
-        return True
-    elif rc == WAIT_TIMEOUT:
-        logger.warning("Timed out waiting for parent PID %d; proceeding anyway (PyInstaller zombie likely)", pid)
-    elif rc == WAIT_FAILED:
-        logger.warning("WaitForSingleObject failed for parent PID %d; proceeding anyway", pid)
-    else:
-        logger.warning("WaitForSingleObject returned 0x%X for parent PID %d; proceeding anyway", rc, pid)
+    # Wait a fixed short grace period. The main client has already exited by now,
+    # so the executable lock is gone. We do not rely on Windows process handles
+    # because PyInstaller bootloader zombies can make OpenProcess/WaitForSingleObject
+    # unreliable in some job contexts.
+    logger.info("Waiting a short grace period for parent PID %d to release locks", pid)
+    time.sleep(3)
     return True
 
 
