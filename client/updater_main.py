@@ -16,6 +16,7 @@ Fallback if installer-url/download fails:
     placed there by the main client and runs that instead.
 """
 import argparse
+import ctypes
 import json
 import logging
 import os
@@ -52,18 +53,48 @@ def wait_for_parent(pid: int, timeout: int = 60) -> bool:
     if pid <= 0:
         logger.info("No parent PID to wait for")
         return True
+
+    # Use Windows synchronization rather than os.kill(pid, 0), because os.kill(0)
+    # may succeed while the process is a zombie whose handle is kept open by the
+    # PyInstaller bootloader parent process.
+    kernel32 = ctypes.windll.kernel32
+    SYNCHRONIZE = 0x00100000
+    INFINITE = 0xFFFFFFFF
+    WAIT_OBJECT_0 = 0x00000000
+    WAIT_TIMEOUT = 0x00000102
+
+    h = kernel32.OpenProcess(SYNCHRONIZE, False, pid)
+    if not h:
+        logger.info("Parent PID %d already gone (OpenProcess failed)", pid)
+        return True
+
     logger.info("Waiting for parent PID %d to exit (timeout %ds)", pid, timeout)
-    start = time.time()
-    while time.time() - start < timeout:
-        try:
-            # os.kill(pid, 0) raises if process is gone
-            os.kill(pid, 0)
-        except OSError:
-            logger.info("Parent PID %d has exited", pid)
-            return True
-        time.sleep(1)
-    logger.warning("Timed out waiting for parent PID %d", pid)
+    ms = int(timeout * 1000)
+    rc = kernel32.WaitForSingleObject(h, ms if ms > 0 else INFINITE)
+    kernel32.CloseHandle(h)
+
+    if rc == WAIT_OBJECT_0:
+        logger.info("Parent PID %d has exited", pid)
+        return True
+    elif rc == WAIT_TIMEOUT:
+        logger.warning("Timed out waiting for parent PID %d", pid)
+    else:
+        logger.warning("WaitForSingleObject returned 0x%X for parent PID %d", rc, pid)
     return False
+
+
+def parent_is_alive(pid: int) -> bool:
+    """Best-effort check; used only as a fallback."""
+    if pid <= 0:
+        return False
+    kernel32 = ctypes.windll.kernel32
+    SYNCHRONIZE = 0x00100000
+    h = kernel32.OpenProcess(SYNCHRONIZE, False, pid)
+    if not h:
+        return False
+    rc = kernel32.WaitForSingleObject(h, 0)
+    kernel32.CloseHandle(h)
+    return rc != 0
 
 
 def download_with_retry(url: str, dst: Path, retries: int = 3) -> bool:
