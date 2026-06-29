@@ -35,9 +35,10 @@ class LogFolderHandler(FileSystemEventHandler):
 
 
 class Watcher:
-    def __init__(self, cfg: Config):
+    def __init__(self, cfg: Config, restart_event: threading.Event | None = None):
         self.cfg = cfg
         self._observer: Observer | None = None
+        self._restart_event = restart_event
 
     def discover_new_sessions(self) -> list[Path]:
         root = Path(self.cfg.get("log_root"))
@@ -92,7 +93,8 @@ class Watcher:
                 logger.info("Update check: %s", msg)
             if should_restart:
                 logger.info("Update downloaded; shutting down for restart")
-                self.stop()
+                if self._restart_event:
+                    self._restart_event.set()
                 os._exit(0)
         except Exception:
             logger.exception("Update check failed")

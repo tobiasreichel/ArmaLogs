@@ -1,4 +1,5 @@
 """Windows tray entry point for ArmaLogs client."""
+import ctypes
 import logging
 import os
 import sys
@@ -127,7 +128,7 @@ class TrayApp:
 
     def _watch(self):
         try:
-            self.watcher = Watcher(self.cfg)
+            self.watcher = Watcher(self.cfg, restart_event=self._restart_event)
             self.watcher.start()
         except Exception:
             logging.exception("Watcher crashed")
