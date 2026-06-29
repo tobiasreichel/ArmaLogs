@@ -16,7 +16,7 @@ from .updater import check_update
 from .watcher import Watcher
 
 
-__version__ = "1.2.4"
+__version__ = "1.2.5"
 
 
 logger = logging.getLogger("armalogs.tray")
