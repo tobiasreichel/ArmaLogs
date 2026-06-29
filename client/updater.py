@@ -144,32 +144,8 @@ def fetch_latest_release_url() -> str:
     return info.get("url", "") if info else ""
 
 
-def spawn_updater(installer: Path, installer_url: str = "") -> bool:
-    """Launch the standalone updater EXE and return immediately.
-
-    The caller should exit the main app after this returns True.
-    """
+def _spawn_batch_updater(installer: Path, target: Path) -> bool:
     my_pid = os.getpid()
-    updater = updater_exe_path()
-    target = installed_exe_path() or running_exe_path()
-
-    if updater and updater.exists():
-        args = [
-            str(updater),
-            f"--parent-pid={my_pid}",
-            f"--installer-url={installer_url}",
-            f"--target-exe={target}",
-            f"--installer-path={installer}",
-        ]
-        logger.info("Launching standalone updater: %s", " ".join(args))
-        subprocess.Popen(
-            args,
-            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
-            close_fds=True,
-        )
-        return True
-
-    logger.warning("Standalone updater not found at %s; falling back to batch updater", updater)
     bat = installer.with_suffix(".bat")
     exe_path = str(target)
     bat.write_text(
@@ -183,7 +159,7 @@ def spawn_updater(installer: Path, installer_url: str = "") -> bool:
         f'    goto wait\n'
         f')\n'
         "echo Running installer...\n"
-        f'"{installer}" /SILENT /NORESTART /SUPPRESSMSGBOXES /SP- /FORCECLOSEAPPLICATIONS /MERGETASKS="autostart"\n'
+        f'"{installer}" /SILENT /NORESTART /SUPPRESSMSGBOXES /SP- /MERGETASKS="autostart"\n'
         "timeout /t 2 /nobreak >nul\n"
         f'start "" "{exe_path}"\n'
         "timeout /t 2 /nobreak >nul\n"
@@ -193,6 +169,54 @@ def spawn_updater(installer: Path, installer_url: str = "") -> bool:
     )
     subprocess.Popen(
         ["cmd", "/c", str(bat)],
+        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+        close_fds=True,
+    )
+    return True
+
+
+def spawn_updater(installer: Path, installer_url: str = "") -> bool:
+    """Copy the updater EXE next to the installer in temp and launch it.
+
+    Running the updater from a temp directory means the install directory
+    is not locked by the updater process, so the Inno installer can use
+    /FORCECLOSEAPPLICATIONS to close any stale client without closing us.
+
+    The caller should exit the main app after this returns True.
+    """
+    my_pid = os.getpid()
+    updater_src = updater_exe_path()
+    target = installed_exe_path() or running_exe_path()
+
+    # Work from a temp directory so the install dir is free for the installer to close.
+    work_dir = Path(tempfile.gettempdir()) / f"armalogs_update_{my_pid}"
+    work_dir.mkdir(parents=True, exist_ok=True)
+
+    local_updater = work_dir / UPDATER_NAME
+    if updater_src and updater_src.exists():
+        try:
+            shutil.copy2(str(updater_src), str(local_updater))
+        except Exception:
+            logger.exception("Failed to copy updater to temp; falling back to install-dir updater")
+            local_updater = updater_src
+    else:
+        local_updater = updater_src
+
+    if not local_updater or not local_updater.exists():
+        logger.error("Updater EXE not available")
+        return _spawn_batch_updater(installer, target)
+
+    args = [
+        str(local_updater),
+        f"--parent-pid={my_pid}",
+        f"--installer-url={installer_url}",
+        f"--target-exe={target}",
+        f"--installer-path={installer}",
+        f"--work-dir={work_dir}",
+    ]
+    logger.info("Launching standalone updater: %s", " ".join(args))
+    subprocess.Popen(
+        args,
         creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
         close_fds=True,
     )

@@ -23,6 +23,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -48,6 +49,9 @@ def setup_logging() -> Path:
 
 
 def wait_for_parent(pid: int, timeout: int = 60) -> bool:
+    if pid <= 0:
+        logger.info("No parent PID to wait for")
+        return True
     logger.info("Waiting for parent PID %d to exit (timeout %ds)", pid, timeout)
     start = time.time()
     while time.time() - start < timeout:
@@ -139,10 +143,12 @@ def main() -> int:
     parser.add_argument("--installer-url", type=str, required=True)
     parser.add_argument("--target-exe", type=str, required=True)
     parser.add_argument("--installer-path", type=str, default="")
+    parser.add_argument("--work-dir", type=str, default="")
     args = parser.parse_args()
 
     target_exe = Path(args.target_exe)
     install_dir = target_exe.parent
+    work_dir = Path(args.work_dir) if args.work_dir else Path(sys.executable).resolve().parent
 
     # 1. Wait for parent to release the locked EXE
     wait_for_parent(args.parent_pid)
@@ -177,7 +183,7 @@ def main() -> int:
         except Exception:
             logger.exception("Failed to back up old client")
 
-    # 6. Run installer
+    # 6. Run installer (force close any stale client; updater is in temp so safe)
     if installer is None or not run_installer(installer):
         logger.error("Update installation failed")
         if backup.exists():
@@ -203,8 +209,19 @@ def main() -> int:
             installer.unlink(missing_ok=True)
         except Exception:
             pass
+    # Remove our temp work dir after a delay so the OS releases handles
+    def _cleanup_workdir():
+        try:
+            time.sleep(2)
+            if work_dir.exists() and work_dir != install_dir:
+                shutil.rmtree(work_dir, ignore_errors=True)
+        except Exception:
+            pass
+
+    threading.Thread(target=_cleanup_workdir, daemon=True).start()
 
     logger.info("Update complete")
+    logging.shutdown()
     return 0
 
 
