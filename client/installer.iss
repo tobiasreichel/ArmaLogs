@@ -50,7 +50,10 @@ Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: no
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{localappdata}\ArmaLogsClient"
-Type: filesandordirs; Name: "{%USERPROFILE}\.armalogs"
+; NOTE: We intentionally do NOT delete {%USERPROFILE}\.armalogs here. That folder
+; contains the user's config.json (server URL + token) and client logs, and must
+; survive uninstalls and updates. If a user really wants to wipe config, they can
+; delete the folder manually or we can add an optional uninstall task later.
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "ArmaLogsClient"; ValueData: """{app}\{#MyAppExeName}"""; Tasks: autostart; Flags: uninsdeletevalue
