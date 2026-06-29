@@ -3,7 +3,7 @@
 ;   "C:\Program Files (x86)\Inno Setup 6\iscc.exe" client\installer.iss
 
 #define MyAppName "ArmaLogs Client"
-#define MyAppVersion "1.2.1"
+#define MyAppVersion "1.2.2"
 #define MyAppPublisher "ArmaLogs"
 #define MyAppURL "https://armalogs.reichel.network"
 #define MyAppExeName "ArmaLogsClient.exe"
@@ -36,6 +36,7 @@ Name: "autostart"; Description: "Start ArmaLogs Client with Windows"; GroupDescr
 
 [Files]
 Source: "dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\ArmaLogsClientUpdater.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "config.json.example"; DestDir: "{app}"; DestName: "config.json.example"; Flags: ignoreversion
 Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
 

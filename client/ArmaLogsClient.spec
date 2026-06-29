@@ -20,6 +20,7 @@ a = Analysis(
         'client.mod_count',
         'packaging',
         'packaging.version',
+        'winreg',
     ],
     hookspath=[],
     hooksconfig={},

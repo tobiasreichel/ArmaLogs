@@ -91,7 +91,8 @@ class Watcher:
             if msg:
                 logger.info("Update check: %s", msg)
             if should_restart:
-                logger.info("Update downloaded; signalling app to exit")
+                logger.info("Update downloaded; shutting down for restart")
+                self.stop()
                 os._exit(0)
         except Exception:
             logger.exception("Update check failed")

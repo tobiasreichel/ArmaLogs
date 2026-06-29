@@ -15,7 +15,7 @@ from .updater import check_update
 from .watcher import Watcher
 
 
-__version__ = "1.2.1"
+__version__ = "1.2.2"
 
 
 logger = logging.getLogger("armalogs.tray")
@@ -122,6 +122,7 @@ class TrayApp:
         if self.watcher:
             self.watcher.stop()
         if self._restart_event.is_set():
+            logger.info("Restart event set; exiting process so updater can replace the EXE")
             sys.exit(0)
 
     def _watch(self):
