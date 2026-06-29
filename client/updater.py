@@ -138,12 +138,6 @@ def download_file(url: str, dst: Path) -> bool:
     return False
 
 
-def fetch_latest_release_url() -> str:
-    """Return the installer browser_download_url of the latest release."""
-    info = fetch_latest_release()
-    return info.get("url", "") if info else ""
-
-
 def _spawn_batch_updater(installer: Path, target: Path) -> bool:
     my_pid = os.getpid()
     bat = installer.with_suffix(".bat")
@@ -217,7 +211,9 @@ def spawn_updater(installer: Path, installer_url: str = "") -> bool:
     logger.info("Launching standalone updater: %s", " ".join(args))
     subprocess.Popen(
         args,
-        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+        creationflags=subprocess.DETACHED_PROCESS
+        | subprocess.CREATE_NEW_PROCESS_GROUP
+        | subprocess.CREATE_BREAKAWAY_FROM_JOB,
         close_fds=True,
     )
     return True
